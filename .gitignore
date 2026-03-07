@@ -1,5 +1,42 @@
+# Dependencies
 node_modules/
-data/
-.DS_Store
+
+# Logs
+*.log
 npm-debug.log*
 yarn-error.log*
+habit-tracker.log
+deepseek-optimization-output.txt
+
+# Runtime data
+data/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Package lock
+package-lock.json
+
+# Offline packages and archives
+knowledge-habit-tracker-offline-*/
+knowledge-habit-tracker-offline-*.tar.gz
+knowledge-habit-tracker-offline-*.zip
