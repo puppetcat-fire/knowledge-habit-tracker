@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>计时悬浮窗</title>
+    <style>
+      :root {
+        --bg: rgba(17, 25, 31, 0.92);
+        --line: rgba(170, 213, 205, 0.18);
+        --text: #f3f7f6;
+        --muted: #9bb1ad;
+        --running: #6fe0c6;
+        --idle: #f0c36b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        color: var(--text);
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      body {
+        padding: 10px;
+        -webkit-app-region: drag;
+      }
+
+      .overlay-card {
+        width: 100%;
+        height: 100%;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+        padding: 14px 16px;
+        display: grid;
+        gap: 10px;
+        align-content: center;
+      }
+
+      .topline {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--idle);
+      }
+
+      .status-dot.running {
+        background: var(--running);
+      }
+
+      .time {
+        font-size: 48px;
+        line-height: 1;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+      }
+
+      .action {
+        font-size: 14px;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .meta {
+        font-size: 12px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="overlay-card">
+      <div class="topline">
+        <span class="status">
+          <span id="status-dot" class="status-dot"></span>
+          <span id="status-text">未开始</span>
+        </span>
+        <span>拖动可移动</span>
+      </div>
+      <div id="time" class="time">00:00:00</div>
+      <div id="action" class="action">当前动作：尚未开始</div>
+      <div id="meta" class="meta">悬浮窗与桌面主窗口共享同一份本地状态。</div>
+    </div>
+    <script src="overlay.js"></script>
+  </body>
+</html>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">Knowledge Habit Overlay</string>
+  <string name="overlay_permission_title">悬浮窗权限</string>
+  <string name="overlay_permission_body">打开后，这个 App 才能在其他软件上方显示常驻计时条。</string>
+  <string name="overlay_permission_action">去授权</string>
+  <string name="start_overlay">启动悬浮计时条</string>
+  <string name="stop_overlay">关闭悬浮计时条</string>
+  <string name="start_timer">开始计时</string>
+  <string name="pause_timer">暂停计时</string>
+  <string name="reset_timer">重置计时</string>
+  <string name="open_settings">打开系统悬浮权限页</string>
+  <string name="timer_idle">未开始</string>
+  <string name="timer_running">计时进行中</string>
+  <string name="timer_paused">计时已暂停</string>
+  <string name="current_action_hint">当前动作，例如：打联盟、整理教程节点</string>
+  <string name="overlay_hint">这个 MVP 只负责 Android 常驻小计时条，不接管主网页逻辑。</string>
+  <string name="notification_channel_name">悬浮计时器</string>
+  <string name="notification_channel_description">让计时条在后台持续运行</string>
+  <string name="notification_title">悬浮计时器运行中</string>
+  <string name="notification_text">点击回到控制面板</string>
+  <string name="overlay_drag_hint">长按并拖动可移动</string>
+  <string name="overlay_expand">展开</string>
+  <string name="overlay_collapse">收起</string>
+</resources>

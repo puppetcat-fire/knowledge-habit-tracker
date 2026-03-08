@@ -1,74 +1,117 @@
-# Knowledge Habit Tracker 🏃‍♂️
+# 点亮习惯记录器
 
-A privacy-focused, offline-first habit tracking system designed specifically for knowledge workers and lifelong learners. Integrates seamlessly with the Dragon Palace Knowledge Hub.
+一个为知识工作场景准备的习惯与事件记录网页，核心约束是：
 
-## 🌟 Features
+- 习惯管理、计时、事件沉淀、备份导入导出默认都只运行在浏览器本地沙箱里
+- 一次只养一个习惯，尽量减少注意力切换
+- 重复事件会自然浮出为“节点候选”，为后续教程化、知识共建做准备
 
-- **Knowledge-Focused Habits**: Track habits related to learning, reading, coding, writing, and other knowledge activities
-- **Time Integration**: Synchronized with time management systems to optimize habit scheduling
-- **Knowledge Correlation**: Link habits to knowledge acquisition and contribution activities
-- **Offline-First**: Pure local operation with no external dependencies or data collection
-- **Privacy by Design**: All habit data stays on your device
-- **Light-up Events**: Celebrate habit milestones as "light-up" events in your knowledge network
-- **Data Export**: Export habit data for analysis and integration with other tools
+## 现在有什么
 
-## 🚀 Quick Start
+- 单习惯养成：同一时间只维护一个激活习惯
+- 事件证据链：手动记录和计时记录都会沉淀为可追溯事件
+- 节点候选：重复动作自动聚合，方便抽成教程节点
+- 纯本地数据：习惯、事件、计时、备份都保存在当前浏览器
+- JSON 备份：支持导出和导入本地数据
+- 本机反馈接口：只有你主动启动本地服务时，反馈页才会写本机日志
+
+## 快速开始
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/knowledge-habit-tracker.git
-cd knowledge-habit-tracker
-
-# Install dependencies
 npm install
-
-# Start the habit tracker
-chmod +x start.sh
-./start.sh
-
-# Access in your browser
-http://localhost:3000
+npm start
 ```
 
-## 🔗 Integration with Knowledge Hub
+打开 [http://127.0.0.1:3000](http://127.0.0.1:3000)。
 
-The Knowledge Habit Tracker is designed to work alongside the [Dragon Palace Knowledge Hub](https://github.com/your-username/dragon-palace-knowledge-hub):
+默认监听 `127.0.0.1`，只允许本机访问。
 
-- **Shared Data Model**: Both systems use compatible data structures for seamless integration
-- **Unified Interface**: Can be deployed together on the same port (3000) for unified access
-- **Knowledge Events**: Habit achievements automatically generate knowledge events
-- **Time Correlation**: Analyze how time management affects habit consistency
+## 桌面悬浮计时窗
 
-## 🏗️ Architecture
+如果你需要跨软件全局可见的计时器，用 Electron 桌面模式：
 
-### Core Components
-- **Habit Tracker**: Core habit tracking and visualization logic
-- **Time Manager**: Integrated time block planning and scheduling
-- **Knowledge Connector**: API layer for integration with knowledge platforms
-- **Local Storage**: Browser-based storage with optional file system backup
+```bash
+npm run desktop
+```
 
-### Technical Stack
-- **Frontend**: Vanilla JavaScript, HTML5, CSS3
-- **Backend**: Node.js with Express (optional, for advanced features)
-- **Storage**: localStorage with IndexedDB fallback
-- **Visualization**: Canvas-based charts and heatmaps
+桌面模式会打开两个窗口：
 
-## 📄 Documentation
+- 主窗口：完整习惯记录器
+- 悬浮窗：始终置顶的计时窗
 
-- [Getting Started Guide](docs/getting-started.md)
-- [API Reference](docs/api.md)
-- [Integration Guide](docs/integration.md)
-- [Data Model](docs/data-model.md)
+快捷键：
 
-## 🤝 Contributing
+- `Ctrl+Shift+T`：显示或隐藏悬浮窗
+- `Ctrl+Shift+H`：唤起主窗口
 
-Contributions are welcome! Please see our [Contribution Guidelines](CONTRIBUTING.md).
+注意：
 
-## 📜 License
+- 悬浮窗和 Electron 主窗口共享同一份本地状态
+- 但它们和你平时用的 Chrome/Edge 浏览器不是同一个 `localStorage`
+- 如果你之前已经在浏览器里积累了数据，先用网页版导出 JSON，再在 Electron 主窗口里导入
 
-MIT License - see [LICENSE](LICENSE) for details.
+## Android 常驻小计时条
 
-## 🙏 Acknowledgments
+仓库里新增了一个 Android 原生 MVP：[`android-overlay`](C:/Users/xiaob/Documents/knowledge-habit-tracker/android-overlay/README.md)
 
-Built as part of the OpenClaw ecosystem.
-Inspired by atomic habits and knowledge worker productivity principles.
+它的目标不是取代网页，而是单独验证这件事：
+
+- 安卓上能不能做一个跨 App 常驻的小计时条
+
+当前已经有：
+
+- 悬浮窗权限申请
+- 前台服务
+- 可拖动小计时条
+- 开始 / 暂停 / 重置
+- 当前动作输入
+
+建议直接用 Android Studio 打开 `android-overlay` 目录。
+
+## 数据边界
+
+### 永远本地的部分
+
+- 激活习惯
+- 历史习惯
+- 事件记录
+- 计时器状态
+- 备份导出文件
+
+这些数据都只存在浏览器 `localStorage` 和你导出的 JSON 文件里，不会自动上传。
+
+### 只有主动启用服务时才会写磁盘的部分
+
+- 反馈页提交的问题日志
+
+它们写入服务端 `data/bug-reports.jsonl`，默认也只在本机可见。
+
+## 开发检查
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+```
+
+## 阿里云部署建议
+
+如果你后面要把这个项目部署到阿里云，建议把它当成两个边界明确的东西：
+
+1. 习惯记录器：继续保持本地沙箱优先，不要一开始就把个人习惯数据塞进公网服务
+2. 知识共建平台：再单独设计账号、权限、审核和共享模型
+
+最小部署建议：
+
+- Node 进程只监听内网或 `127.0.0.1`
+- 用 Nginx 做反向代理和 HTTPS
+- 只开放 `/`、`/app.js`、`/style.css`、`/health`、`/api/bugs`
+- `data` 目录不要暴露为静态目录
+- 上云前先导出一份 JSON 备份
+
+## 适合下一步补的东西
+
+- 把“节点候选”真正升级成可编辑的教程节点
+- 为知识共建平台增加身份、权限和审核流
+- 给事件和节点增加标签、引用、关联材料
+- 如果真要跨设备同步，再单独设计加密和授权，而不是直接上传本地习惯数据

@@ -3,7 +3,13 @@ const globals = require("globals");
 
 module.exports = [
   {
-    ignores: ["node_modules/**"]
+    ignores: [
+      "node_modules/**",
+      "app-offline.js",
+      "server-basic-secure.js",
+      "server-secure.js",
+      "storage-manager.js"
+    ]
   },
   {
     files: ["**/*.js"],

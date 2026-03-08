@@ -3,207 +3,482 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Knowledge Habit Tracker</title>
+    <meta
+      name="description"
+      content="为知识工作者设计的单任务习惯记录器，把事件沉淀成可追溯、可复用的知识节点。"
+    />
+    <title>点亮习惯记录器</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="app">
-      <header class="header">
-        <div>
-          <h1>Knowledge Habit Tracker</h1>
-          <p class="subtitle">Done List 只记录你做了什么</p>
+    <div class="app-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Knowledge Habit Tracker</p>
+          <h1>点亮习惯记录器</h1>
+          <p class="subtitle">
+            一次只做一件事。习惯、事件、计时和备份默认都只运行在本地沙箱里，再把“谁在什么时候做了什么”沉淀成节点。
+          </p>
         </div>
-        <div class="connection">
-          <label class="toggle">
-            <input id="hub-connected" type="checkbox" />
-            <span>已连接知识共享平台</span>
+
+        <div class="hero-side">
+          <label class="toggle-card" for="hub-connected">
+            <span class="toggle-title">同步到知识共建平台</span>
+            <span class="toggle-help">打开后，记录会被标记为“点亮事件”</span>
+            <span class="toggle-row">
+              <input id="hub-connected" type="checkbox" />
+              <span class="toggle-switch" aria-hidden="true"></span>
+            </span>
           </label>
         </div>
       </header>
 
-      <nav class="nav">
-        <button class="nav-button active" type="button" data-page-target="timer">计时</button>
-        <button class="nav-button" type="button" data-page-target="habit">习惯</button>
-        <button class="nav-button" type="button" data-page-target="bug">Bug 收集</button>
+      <section class="overview-grid" aria-label="今日概览">
+        <article class="overview-card">
+          <span class="overview-label">今日已记录</span>
+          <strong id="overview-today" class="overview-value">0 次</strong>
+        </article>
+        <article class="overview-card">
+          <span class="overview-label">连续天数</span>
+          <strong id="overview-streak" class="overview-value">0 天</strong>
+        </article>
+        <article class="overview-card">
+          <span class="overview-label">当前习惯</span>
+          <strong id="overview-active-habit" class="overview-value">未设置</strong>
+        </article>
+        <article class="overview-card">
+          <span class="overview-label">节点候选</span>
+          <strong id="overview-node-candidates" class="overview-value">0 个</strong>
+        </article>
+      </section>
+
+      <nav class="nav" aria-label="主导航">
+        <button class="nav-button active" type="button" data-page-target="timer">专注计时</button>
+        <button class="nav-button" type="button" data-page-target="habit">习惯与事件</button>
+        <button class="nav-button" type="button" data-page-target="bug">反馈与安全</button>
       </nav>
 
-      <section class="page" data-page="timer">
-        <div class="panel timer-panel">
-          <h2>专注计时</h2>
-          <div id="habit-reminder" class="reminder hidden"></div>
-          <div class="timer-predict">
-            <label for="timer-prediction">本次行动预测</label>
-            <div class="input-row">
-              <input id="timer-prediction" type="text" maxlength="80" placeholder="例如：完成阅读与复盘" />
-              <button id="habit-picker-toggle" class="icon-button" type="button">+</button>
-            </div>
-          </div>
-          <div class="timer-actions timer-actions-top">
-            <button id="timer-start" class="primary" type="button">开始</button>
-            <button id="timer-reset" class="secondary" type="button">重置</button>
-            <button id="timer-finish" class="secondary" type="button">结束并生成战报</button>
-          </div>
-          <div id="timer-display" class="timer-display">00:00:00</div>
-          <div id="timer-prediction-display" class="timer-prediction-display">未预测</div>
-          <div id="timer-suggestions" class="timer-suggestions"></div>
-          <div id="habit-picker" class="habit-picker hidden">
-            <div class="habit-picker-header">
-              <span>计时习惯</span>
-              <span id="timer-habit-label" class="save-status"></span>
-            </div>
-            <div class="habit-picker-search">
-              <input id="habit-picker-search" type="text" maxlength="40" placeholder="搜索习惯" />
-            </div>
-            <div id="habit-picker-list" class="habit-picker-list"></div>
-          </div>
-          <div class="habit-detail">
-            <div class="habit-detail-row">
-              <span>重复日志</span>
-              <span id="timer-recurring-status" class="save-status"></span>
-            </div>
-            <textarea id="timer-recurring-log" class="habit-log" rows="3" maxlength="300" placeholder="例如：执行顺序、注意事项"></textarea>
-          </div>
-          <div class="timer-predict">
-            <label for="timer-single-log">单次日志</label>
-            <textarea id="timer-single-log" rows="3" maxlength="300" placeholder="例如：心情、感受"></textarea>
-          </div>
-          <div id="timer-report" class="report hidden"></div>
-        </div>
-      </section>
-
-      <section class="page hidden" data-page="habit">
-        <div class="panel">
-          <h2>当前习惯</h2>
-          <div id="habit-empty" class="empty-state">
-            <p>一次只养成一个习惯，先创建你的第一个习惯。</p>
-            <form id="habit-form" class="form">
-              <div class="field">
-                <label>习惯名称</label>
-                <input id="habit-name" type="text" required maxlength="40" placeholder="例如：阅读30分钟" />
-              </div>
-              <div class="field">
-                <label>养成周期（天）</label>
-                <input id="habit-days" type="number" min="60" max="255" value="60" required />
-              </div>
-              <div class="field">
-                <label>重复日志</label>
-                <textarea id="habit-recurring-log" rows="3" maxlength="300" placeholder="例如：执行顺序、注意事项"></textarea>
-              </div>
-              <button class="primary" type="submit">开始养成</button>
-            </form>
-          </div>
-
-          <div id="habit-active" class="habit-card hidden">
-            <div class="habit-main">
+      <main class="page-stack">
+        <section class="page" data-page="timer">
+          <div class="panel timer-panel">
+            <div class="panel-header">
               <div>
-                <h3 id="habit-title"></h3>
-                <p id="habit-meta"></p>
+                <h2>当前动作</h2>
+                <p>把本次要做的事说清楚，然后开始一次完整记录。</p>
               </div>
-              <div class="habit-actions">
-              <button id="start-timer-from-habit" class="primary" type="button">从习惯开始计时</button>
-                <button id="edit-habit" class="secondary" type="button">编辑</button>
-                <button id="delete-habit" class="danger-button" type="button">删除</button>
-                <button id="complete-habit" class="secondary" type="button">结束当前习惯</button>
+              <span id="habit-reminder" class="inline-badge hidden"></span>
+            </div>
+
+            <div class="timer-predict">
+              <label for="timer-prediction">本次动作预测</label>
+              <div class="input-row">
+                <input
+                  id="timer-prediction"
+                  type="text"
+                  maxlength="80"
+                  autocomplete="off"
+                  placeholder="例如：整理知识节点、复盘一段代码、阅读一节教程"
+                />
+                <button id="habit-picker-toggle" class="icon-button" type="button" aria-expanded="false">
+                  选择习惯
+                </button>
               </div>
             </div>
-            <div class="habit-progress">
-              <div class="progress-row">
-                <span>累计天数</span>
-                <span id="habit-days-progress"></span>
-              </div>
-              <div class="progress-row">
-                <span>连续4周达标</span>
-                <span id="habit-weekly-status"></span>
+
+            <div id="timer-suggestions" class="timer-suggestions" aria-live="polite"></div>
+            <div id="timer-prediction-display" class="timer-prediction-display">尚未选择动作</div>
+
+            <div class="timer-readout">
+              <div id="timer-display" class="timer-display">00:00:00</div>
+              <div class="timer-actions">
+                <button id="timer-start" class="primary" type="button">开始</button>
+                <button id="timer-reset" class="secondary" type="button">重置</button>
+                <button id="timer-finish" class="secondary" type="button">结束并生成记录</button>
               </div>
             </div>
-            <div class="habit-detail"></div>
+
+            <div id="habit-picker" class="picker hidden">
+              <div class="picker-header">
+                <div>
+                  <span class="picker-title">挂靠习惯</span>
+                  <span id="timer-habit-label" class="save-status">自由记录</span>
+                </div>
+              </div>
+              <label class="picker-search" for="habit-picker-search">
+                <span>搜索习惯</span>
+                <input id="habit-picker-search" type="text" maxlength="40" placeholder="输入关键词" />
+              </label>
+              <div id="habit-picker-list" class="habit-picker-list"></div>
+            </div>
+
+            <div class="detail-grid">
+              <label class="field">
+                <span>重复日志 / 固定步骤</span>
+                <span id="timer-recurring-status" class="save-status">当前没有激活习惯</span>
+                <textarea
+                  id="timer-recurring-log"
+                  class="habit-log"
+                  rows="4"
+                  maxlength="400"
+                  placeholder="例如：开场检查、参考资料、执行顺序、注意事项"
+                ></textarea>
+              </label>
+
+              <label class="field">
+                <span>单次日志 / 本次特例</span>
+                <textarea
+                  id="timer-single-log"
+                  rows="4"
+                  maxlength="400"
+                  placeholder="例如：卡住点、环境信息、临时决定、情绪状态"
+                ></textarea>
+              </label>
+              <div class="quick-note-actions">
+                <span class="meta-note">适合随手记一句。支持 Ctrl/Cmd + Enter 直接提交。</span>
+                <button id="timer-quick-save" class="secondary" type="button">单次提交随手记</button>
+              </div>
+            </div>
+
+            <div id="timer-report" class="report hidden"></div>
           </div>
-        </div>
+        </section>
 
-        <div class="panel">
-          <h2>习惯历史</h2>
-          <div id="habit-history-list" class="done-list"></div>
-        </div>
-
-        <div class="panel">
-          <h2>完成记录（Done List）</h2>
-          <form id="done-form" class="form">
-            <div class="field">
-              <label>今天完成了什么</label>
-              <input id="done-title" type="text" required maxlength="80" placeholder="例如：读完一章" />
+        <section class="page hidden" data-page="habit">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>当前习惯</h2>
+                <p>坚持“一次只养一个”。先把正在养成的动作固定下来。</p>
+              </div>
             </div>
-            <div class="field">
-              <label>单次日志</label>
-              <textarea id="done-log" rows="3" maxlength="300" placeholder="例如：心情、感受"></textarea>
+
+            <div id="habit-empty" class="stack-block">
+              <p class="empty-state">还没有激活习惯。先定义一个目标，再开始记录事件。</p>
+              <form id="habit-form" class="form">
+                <label class="field">
+                  <span>习惯名称</span>
+                  <input id="habit-name" type="text" required maxlength="40" placeholder="例如：每天复盘 20 分钟" />
+                </label>
+                <label class="field">
+                  <span>目标天数</span>
+                  <input id="habit-days" type="number" min="21" max="365" value="60" required />
+                </label>
+                <label class="field">
+                  <span>重复日志 / 固定步骤</span>
+                  <textarea
+                    id="habit-recurring-log"
+                    rows="4"
+                    maxlength="400"
+                    placeholder="例如：打开资料库、阅读旧记录、记录结论、同步到知识平台"
+                  ></textarea>
+                </label>
+                <button class="primary" type="submit">开始养成</button>
+              </form>
             </div>
-            <button class="primary" type="submit">记录完成</button>
-          </form>
 
-          <div id="battle-report" class="report hidden"></div>
+            <div id="habit-active" class="habit-card hidden">
+              <div class="habit-main">
+                <div class="habit-summary">
+                  <h3 id="habit-title"></h3>
+                  <p id="habit-meta"></p>
+                </div>
+                <div class="habit-actions">
+                  <button id="start-timer-from-habit" class="primary" type="button">从该习惯开始计时</button>
+                  <button id="edit-habit" class="secondary" type="button">编辑</button>
+                  <button id="delete-habit" class="ghost-danger" type="button">删除</button>
+                  <button id="complete-habit" class="secondary" type="button">结束当前习惯</button>
+                </div>
+              </div>
 
-          <div class="filters">
-            <button data-range="all" class="filter active" type="button">全部</button>
-            <button data-range="yesterday" class="filter" type="button">昨天</button>
-            <button data-range="week" class="filter" type="button">上周</button>
-            <button data-range="month" class="filter" type="button">上个月</button>
+              <div class="metric-grid">
+                <div class="metric-card">
+                  <span>完成天数</span>
+                  <strong id="habit-days-progress">0 / 0</strong>
+                </div>
+                <div class="metric-card">
+                  <span>连续一致性</span>
+                  <strong id="habit-weekly-status">暂无记录</strong>
+                </div>
+              </div>
+
+              <div class="habit-detail">
+                <div class="habit-detail-row">
+                  <span>重复日志</span>
+                  <span class="meta-note">用于抽出稳定的节点步骤</span>
+                </div>
+                <div id="habit-recurring-preview" class="habit-log">暂无</div>
+              </div>
+            </div>
           </div>
 
-          <div id="done-list" class="done-list"></div>
-        </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>手动补录</h2>
+                <p>非计时场景也能留下事件证据。</p>
+              </div>
+            </div>
 
-        <div class="panel">
-          <h2>按习惯查看完成记录</h2>
-          <div id="habit-event-groups" class="done-list"></div>
-        </div>
-      </section>
+            <form id="done-form" class="form">
+              <label class="field">
+                <span>这次做了什么</span>
+                <input
+                  id="done-title"
+                  type="text"
+                  required
+                  maxlength="80"
+                  placeholder="例如：补全一段流程图、修复一个接口权限问题"
+                />
+              </label>
+              <label class="field">
+                <span>单次日志</span>
+                <textarea
+                  id="done-log"
+                  rows="3"
+                  maxlength="400"
+                  placeholder="例如：背景、结果、阻塞点、后续动作"
+                ></textarea>
+              </label>
+              <button class="primary" type="submit">记录完成</button>
+            </form>
 
-      <section class="page hidden" data-page="bug">
-        <div class="panel">
-          <h2>Bug 收集</h2>
-          <p class="empty-state">此处用于收集你在使用中的问题与建议，提交到本地服务器。</p>
-          <form id="bug-form" class="form">
-            <div class="field">
-              <label>标题</label>
-              <input id="bug-title" type="text" required maxlength="100" placeholder="简要说明问题" />
-            </div>
-            <div class="field">
-              <label>问题描述</label>
-              <textarea id="bug-description" rows="4" required maxlength="1000" placeholder="详细描述出现的问题"></textarea>
-            </div>
-            <div class="field">
-              <label>复现步骤</label>
-              <textarea id="bug-steps" rows="4" maxlength="1000" placeholder="一步步说明如何复现"></textarea>
-            </div>
-            <div class="field">
-              <label>期望结果</label>
-              <textarea id="bug-expected" rows="3" maxlength="500" placeholder="你希望的行为或结果"></textarea>
-            </div>
-            <div class="field">
-              <label>实际结果</label>
-              <textarea id="bug-actual" rows="3" maxlength="500" placeholder="实际发生了什么"></textarea>
-            </div>
-            <div class="field">
-              <label>严重级别</label>
-              <select id="bug-severity">
-                <option value="low">低</option>
-                <option value="medium" selected>中</option>
-                <option value="high">高</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>联系方式（可选）</label>
-              <input id="bug-contact" type="text" maxlength="100" placeholder="Email 或其他联系方式" />
-            </div>
-            <button class="primary" type="submit">提交 Bug</button>
-          </form>
-          <div id="bug-status" class="report hidden"></div>
-        </div>
+            <div id="battle-report" class="report hidden"></div>
+          </div>
 
-        <div class="panel">
-          <h2>最近提交</h2>
-          <div id="bug-list" class="done-list"></div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>记录查看</h2>
+                <p>把正式事件、随手记、习惯上下文、日周月视角分开看。</p>
+              </div>
+            </div>
+
+            <div class="record-tabs" role="tablist" aria-label="记录查看页签">
+              <button class="record-tab active" type="button" data-record-tab-target="events">事件查看</button>
+              <button class="record-tab" type="button" data-record-tab-target="quick-notes">随手记</button>
+              <button class="record-tab" type="button" data-record-tab-target="habits">习惯查看</button>
+              <button class="record-tab" type="button" data-record-tab-target="periods">日周月</button>
+            </div>
+
+            <section class="record-section" data-record-tab="events">
+              <div class="two-column">
+                <div class="panel panel-nested">
+                  <div class="panel-header">
+                    <div>
+                      <h2>事件记录</h2>
+                      <p>这里放正式事件，不包含随手记。</p>
+                    </div>
+                  </div>
+
+                  <div class="toolbar">
+                    <div class="filters">
+                      <button data-range="all" class="filter active" type="button">全部</button>
+                      <button data-range="today" class="filter" type="button">今天</button>
+                      <button data-range="week" class="filter" type="button">近 7 天</button>
+                      <button data-range="month" class="filter" type="button">近 30 天</button>
+                    </div>
+                    <label class="search-box" for="event-search">
+                      <span>搜索</span>
+                      <input id="event-search" type="search" maxlength="40" placeholder="搜标题或日志" />
+                    </label>
+                  </div>
+
+                  <div id="done-list" class="done-list"></div>
+                </div>
+
+                <div class="panel panel-nested">
+                  <div class="panel-header">
+                    <div>
+                      <h2>节点候选</h2>
+                      <p>只从正式事件里抽候选，不吃随手记。</p>
+                    </div>
+                  </div>
+                  <div id="node-candidate-list" class="done-list"></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="record-section hidden" data-record-tab="quick-notes">
+              <div class="panel panel-nested">
+                <div class="panel-header">
+                  <div>
+                    <h2>随手记流水账</h2>
+                    <p>随手记是独立事件，但不参与习惯归档和节点候选。</p>
+                  </div>
+                </div>
+                <div id="quick-note-list" class="done-list"></div>
+              </div>
+            </section>
+
+            <section class="record-section hidden" data-record-tab="habits">
+              <div class="two-column">
+                <div class="panel panel-nested">
+                  <div class="panel-header">
+                    <div>
+                      <h2>按习惯查看事件</h2>
+                      <p>看每个习惯已经沉淀了哪些事件链。</p>
+                    </div>
+                  </div>
+                  <div id="habit-event-groups" class="done-list"></div>
+                </div>
+
+                <div class="panel panel-nested">
+                  <div class="panel-header">
+                    <div>
+                      <h2>习惯历史</h2>
+                      <p>结束后的习惯也保留，可继续作为事件上下文。</p>
+                    </div>
+                  </div>
+                  <div id="habit-history-list" class="done-list"></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="record-section hidden" data-record-tab="periods">
+              <div class="three-column">
+                <div class="panel panel-nested">
+                  <div class="panel-header">
+                    <div>
+                      <h2>按日查看</h2>
+                      <p>每天发生了什么，适合看节奏和密度。</p>
+                    </div>
+                  </div>
+                  <div id="day-view-list" class="done-list"></div>
+                </div>
+
+                <div class="panel panel-nested">
+                  <div class="panel-header">
+                    <div>
+                      <h2>按周查看</h2>
+                      <p>适合看周节奏、周完成度和波动。</p>
+                    </div>
+                  </div>
+                  <div id="week-view-list" class="done-list"></div>
+                </div>
+
+                <div class="panel panel-nested">
+                  <div class="panel-header">
+                    <div>
+                      <h2>按月查看</h2>
+                      <p>适合看阶段性输出和习惯走势。</p>
+                    </div>
+                  </div>
+                  <div id="month-view-list" class="done-list"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>数据备份</h2>
+                <p>当前主要数据保存在浏览器本地。部署前，先建立可恢复的导出习惯。</p>
+              </div>
+            </div>
+
+            <div class="backup-actions">
+              <button id="backup-export" class="secondary" type="button">导出 JSON 备份</button>
+              <label class="secondary pseudo-button" for="backup-file">导入 JSON 备份</label>
+              <input id="backup-file" type="file" accept="application/json" hidden />
+            </div>
+            <div id="backup-status" class="report soft-report hidden"></div>
+          </div>
+        </section>
+
+        <section class="page hidden" data-page="bug">
+          <div class="two-column">
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>问题反馈</h2>
+                  <p>习惯管理本身保持纯本地；只有你主动打开本地服务时，这里的反馈才会写入本机日志。</p>
+                </div>
+              </div>
+
+              <form id="bug-form" class="form">
+                <label class="field">
+                  <span>标题</span>
+                  <input id="bug-title" type="text" required maxlength="100" placeholder="一句话说明问题" />
+                </label>
+                <label class="field">
+                  <span>问题描述</span>
+                  <textarea id="bug-description" rows="4" required maxlength="1000" placeholder="描述现象、影响和出现频率"></textarea>
+                </label>
+                <label class="field">
+                  <span>复现步骤</span>
+                  <textarea id="bug-steps" rows="4" maxlength="1000" placeholder="按步骤写，方便以后变成测试用例"></textarea>
+                </label>
+                <label class="field">
+                  <span>期望结果</span>
+                  <textarea id="bug-expected" rows="3" maxlength="500" placeholder="你原本希望发生什么"></textarea>
+                </label>
+                <label class="field">
+                  <span>实际结果</span>
+                  <textarea id="bug-actual" rows="3" maxlength="500" placeholder="现在实际发生了什么"></textarea>
+                </label>
+                <label class="field">
+                  <span>严重级别</span>
+                  <select id="bug-severity">
+                    <option value="low">低</option>
+                    <option value="medium" selected>中</option>
+                    <option value="high">高</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>联系方式（可选）</span>
+                  <input id="bug-contact" type="text" maxlength="100" placeholder="邮箱、IM 或昵称" />
+                </label>
+                <button class="primary" type="submit">提交反馈</button>
+              </form>
+
+              <div id="bug-status" class="report hidden"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>部署前检查</h2>
+                  <p>准备放到阿里云之前，至少把下面几件事做到位。</p>
+                </div>
+              </div>
+              <ul class="checklist">
+                <li>只暴露必要静态文件，不暴露源码、文档和 `data` 目录。</li>
+                <li>反向代理层启用 HTTPS，并只开放 80/443。</li>
+                <li>备份浏览器数据，再考虑迁移到服务端持久化。</li>
+                <li>将反馈数据目录放到独立磁盘或定时快照。</li>
+                <li>为知识共建平台设计清晰的身份和权限边界。</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>最近反馈</h2>
+                <p>本地缓存和服务端返回会合并显示。</p>
+              </div>
+            </div>
+            <div id="bug-list" class="done-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="modal-root" class="modal-root hidden" aria-hidden="true">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-header">
+          <h3 id="modal-title">编辑</h3>
+          <button id="modal-close" class="icon-button subtle" type="button" aria-label="关闭">关闭</button>
         </div>
-      </section>
+        <form id="modal-form" class="form">
+          <div id="modal-fields" class="form"></div>
+          <div class="modal-actions">
+            <button id="modal-cancel" class="secondary" type="button">取消</button>
+            <button id="modal-save" class="primary" type="submit">保存</button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <script src="app.js"></script>

@@ -32,6 +32,9 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+.gradle/
+**/build/
+**/local.properties
 
 # Package lock
 package-lock.json
