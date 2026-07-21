@@ -7,8 +7,7 @@ module.exports = [
       "node_modules/**",
       "app-offline.js",
       "server-basic-secure.js",
-      "server-secure.js",
-      "storage-manager.js"
+      "server-secure.js"
     ]
   },
   {

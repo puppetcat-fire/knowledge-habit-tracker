@@ -1366,24 +1366,24 @@
     events
       .filter((event) => event.source !== "quick-note")
       .forEach((event) => {
-      const key = `${event.habitId || "free"}::${event.title}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          title: event.title,
-          habitName: event.habitName || "",
-          count: 0,
-          lastCreatedAt: event.createdAt,
-          logs: []
-        });
-      }
-      const group = groups.get(key);
-      group.count += 1;
-      if (new Date(event.createdAt).getTime() > new Date(group.lastCreatedAt).getTime()) {
-        group.lastCreatedAt = event.createdAt;
-      }
-      if (event.singleLog) {
-        group.logs.push(event.singleLog);
-      }
+        const key = `${event.habitId || "free"}::${event.title}`;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            title: event.title,
+            habitName: event.habitName || "",
+            count: 0,
+            lastCreatedAt: event.createdAt,
+            logs: []
+          });
+        }
+        const group = groups.get(key);
+        group.count += 1;
+        if (new Date(event.createdAt).getTime() > new Date(group.lastCreatedAt).getTime()) {
+          group.lastCreatedAt = event.createdAt;
+        }
+        if (event.singleLog) {
+          group.logs.push(event.singleLog);
+        }
       });
     return Array.from(groups.values())
       .filter((candidate) => candidate.count >= 2)
@@ -1405,14 +1405,14 @@
     events
       .filter((event) => event.source !== "quick-note")
       .forEach((event) => {
-      const key = event.habitId || `free:${event.habitName || CUSTOM_HABIT_NAME}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          label: event.habitName || CUSTOM_HABIT_NAME,
-          events: []
-        });
-      }
-      groups.get(key).events.push(event);
+        const key = event.habitId || `free:${event.habitName || CUSTOM_HABIT_NAME}`;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            label: event.habitName || CUSTOM_HABIT_NAME,
+            events: []
+          });
+        }
+        groups.get(key).events.push(event);
       });
     return Array.from(groups.values())
       .map((group) => ({
