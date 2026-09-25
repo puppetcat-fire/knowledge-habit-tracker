@@ -112,7 +112,7 @@ npm test
 
 - Node 进程只监听内网或 `127.0.0.1`
 - 用 Nginx 做反向代理和 HTTPS
-- 只开放 `/`、`/app.js`、`/style.css`、`/health`、`/api/bugs`
+- 只开放 `/`、`/app.js`、`/style.css`、`/seed-trees/seed-trees.js`、`/health`、`/api/bugs`
 - `data` 目录不要暴露为静态目录
 - 上云前先导出一份 JSON 备份
 
