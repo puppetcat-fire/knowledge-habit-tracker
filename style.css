@@ -456,6 +456,22 @@ button {
   background: rgba(255, 255, 255, 0.46);
 }
 
+.node-picker-free {
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.node-picker-free.active {
+  border-color: rgba(33, 111, 102, 0.28);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
 .picker-title {
   display: block;
   font-size: 14px;

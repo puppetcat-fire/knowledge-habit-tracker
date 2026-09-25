@@ -72,6 +72,48 @@
               <div id="habit-picker-list" class="habit-picker-list"></div>
             </div>
 
+            <div id="node-aim-field" class="timer-predict">
+              <span>瞄准节点</span>
+              <div class="input-row">
+                <span id="node-aim-label" class="save-status">未瞄准节点</span>
+                <button id="node-picker-toggle" class="icon-button" type="button" aria-expanded="false">
+                  选择节点
+                </button>
+              </div>
+            </div>
+
+            <div id="node-picker" class="picker hidden">
+              <div class="picker-header">
+                <div>
+                  <span class="picker-title">瞄准节点</span>
+                  <span class="meta-note">选中后，下一次正式记录会挂上它</span>
+                </div>
+              </div>
+              <label class="picker-search" for="node-picker-search">
+                <span>搜索节点</span>
+                <input id="node-picker-search" type="text" maxlength="40" placeholder="输入节点标题" />
+              </label>
+              <div id="node-picker-list" class="habit-picker-list"></div>
+            </div>
+
+            <div id="node-card" class="panel panel-nested hidden">
+              <div class="panel-header">
+                <div>
+                  <h3 id="node-card-title"></h3>
+                  <p id="node-card-meta" class="meta-note"></p>
+                </div>
+                <button id="node-clear" class="icon-button subtle" type="button">清除瞄准</button>
+              </div>
+              <div id="node-card-notice" class="report hidden"></div>
+              <div class="stack-block">
+                <div class="meta-note">目标</div>
+                <div id="node-card-goal" class="habit-log"></div>
+                <div class="meta-note">自证提示</div>
+                <div id="node-card-verify" class="habit-log"></div>
+                <div id="node-card-tutorials" class="stack-block"></div>
+              </div>
+            </div>
+
             <div class="detail-grid">
               <label class="field">
                 <span>重复日志 / 固定步骤</span>
@@ -142,6 +184,10 @@
             <article class="overview-card">
               <span class="overview-label">节点候选</span>
               <strong id="overview-node-candidates" class="overview-value">0 个</strong>
+            </article>
+            <article class="overview-card">
+              <span class="overview-label">已点亮节点</span>
+              <strong id="overview-lit-nodes" class="overview-value">0 / 0</strong>
             </article>
           </section>
         </section>
@@ -241,6 +287,12 @@
                   maxlength="400"
                   placeholder="例如：背景、结果、阻塞点、后续动作"
                 ></textarea>
+              </label>
+              <label class="field" id="done-node-field">
+                <span>挂靠节点</span>
+                <select id="done-node-select">
+                  <option value="">不挂节点</option>
+                </select>
               </label>
               <button class="primary" type="submit">记录完成</button>
             </form>

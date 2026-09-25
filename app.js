@@ -5,6 +5,11 @@
   const MAX_BUG_CACHE = 20;
   const TREE_FORMAT = "forest-tree/v1";
   const STATE_VERSION = 3;
+  const AIM_TTL_MS = 8 * 60 * 60 * 1000;
+  const AIM_NOTICE_TEXT = {
+    expired: "上次的瞄准已过期，请重新选择节点",
+    dangling: "上次瞄准的节点已不存在，已清除瞄准"
+  };
 
   const defaultState = {
     version: STATE_VERSION,
@@ -33,7 +38,6 @@
   };
 
   let state = loadState();
-  loadSeedTrees();
   let activeRange = "all";
   let activePage = "timer";
   let activeRecordTab = "events";
@@ -41,6 +45,20 @@
   let lastTimerPersist = 0;
   let currentBugList = getCachedBugs();
   let modalContext = null;
+  let seedTrees = [];
+  let nodeIndex = new Map();
+  let tutorialIndex = new Map();
+  let lightUpByEventId = new Map();
+  // 一次性提示（'expired' | 'dangling' | null）：模块级，不进 state、不参与导出
+  let lastAimNotice = null;
+  const expandedTutorialIds = new Set();
+
+  // 启动顺序：state → 种子树 → 索引 → 清理失效瞄准（只留提示）→ 首次 render()
+  seedTrees = loadSeedTrees();
+  nodeIndex = buildNodeIndex(seedTrees);
+  tutorialIndex = buildTutorialIndex(seedTrees);
+  rebuildLightUpIndex();
+  pruneStaleAim();
 
   const elements = {
     hubToggle: document.getElementById("hub-connected"),
@@ -50,6 +68,7 @@
     overviewStreak: document.getElementById("overview-streak"),
     overviewActiveHabit: document.getElementById("overview-active-habit"),
     overviewNodeCandidates: document.getElementById("overview-node-candidates"),
+    overviewLitNodes: document.getElementById("overview-lit-nodes"),
     habitReminder: document.getElementById("habit-reminder"),
     habitForm: document.getElementById("habit-form"),
     habitEmpty: document.getElementById("habit-empty"),
@@ -70,6 +89,8 @@
     doneForm: document.getElementById("done-form"),
     doneTitleInput: document.getElementById("done-title"),
     doneLogInput: document.getElementById("done-log"),
+    doneNodeField: document.getElementById("done-node-field"),
+    doneNodeSelect: document.getElementById("done-node-select"),
     recordTabButtons: Array.from(document.querySelectorAll(".record-tab")),
     recordSections: Array.from(document.querySelectorAll(".record-section")),
     doneList: document.getElementById("done-list"),
@@ -99,6 +120,20 @@
     habitPickerSearch: document.getElementById("habit-picker-search"),
     habitPickerList: document.getElementById("habit-picker-list"),
     timerHabitLabel: document.getElementById("timer-habit-label"),
+    nodeAimField: document.getElementById("node-aim-field"),
+    nodeAimLabel: document.getElementById("node-aim-label"),
+    nodePickerToggle: document.getElementById("node-picker-toggle"),
+    nodePicker: document.getElementById("node-picker"),
+    nodePickerSearch: document.getElementById("node-picker-search"),
+    nodePickerList: document.getElementById("node-picker-list"),
+    nodeCard: document.getElementById("node-card"),
+    nodeCardTitle: document.getElementById("node-card-title"),
+    nodeCardMeta: document.getElementById("node-card-meta"),
+    nodeCardGoal: document.getElementById("node-card-goal"),
+    nodeCardVerify: document.getElementById("node-card-verify"),
+    nodeCardTutorials: document.getElementById("node-card-tutorials"),
+    nodeCardNotice: document.getElementById("node-card-notice"),
+    nodeClear: document.getElementById("node-clear"),
     backupExportButton: document.getElementById("backup-export"),
     backupFileInput: document.getElementById("backup-file"),
     backupStatus: document.getElementById("backup-status"),
@@ -255,6 +290,29 @@
       renderHabitPicker();
     });
 
+    elements.nodePickerToggle.addEventListener("click", () => {
+      const hidden = elements.nodePicker.classList.toggle("hidden");
+      elements.nodePickerToggle.setAttribute("aria-expanded", String(!hidden));
+    });
+
+    elements.nodePickerSearch.addEventListener("input", () => {
+      renderNodePicker();
+    });
+
+    elements.nodeClear.addEventListener("click", () => {
+      setSelectedNode(null, null);
+    });
+
+    elements.doneNodeSelect.addEventListener("change", () => {
+      const nodeId = elements.doneNodeSelect.value;
+      if (!nodeId) {
+        setSelectedNode(null, null);
+        return;
+      }
+      const option = elements.doneNodeSelect.options[elements.doneNodeSelect.selectedIndex];
+      setSelectedNode(option ? option.dataset.treeId : null, nodeId);
+    });
+
     elements.timerSingleLogInput.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();
@@ -340,6 +398,7 @@
           return;
         }
         state.events = state.events.filter((item) => item.id !== id);
+        // PR-4：删除事件时还要级联清掉它的 draft lightup，并 rebuildLightUpIndex()
         saveState();
         render();
       }
@@ -442,7 +501,10 @@
     const habit = resolveSelectedHabitForManualRecord();
     const createdAt = new Date();
     const singleLog = elements.doneLogInput.value.trim();
-    const lightUp = state.settings.hubConnected;
+    const aimNode = resolveAimNode();
+    const aimTree = aimNode ? getActiveTree() : null;
+    // 旧字段：v3 起不再写 true，点亮由 state.forest.lightups 表达
+    const lightUp = false;
     const newEvent = {
       id: createId(),
       habitId: habit ? habit.id : null,
@@ -453,9 +515,14 @@
       singleLog,
       source: "manual",
       durationMs: null,
-      report: buildManualReport(habit, title, createdAt, lightUp, singleLog)
+      report: buildManualReport(habit, title, createdAt, lightUp, singleLog),
+      nodeId: aimNode ? aimNode.id : null,
+      treeId: aimTree ? aimTree.tree.id : null
     };
     state.events.unshift(newEvent);
+    if (aimNode) {
+      createLightUpDraft(newEvent);
+    }
     elements.doneForm.reset();
     saveState();
     render();
@@ -469,7 +536,8 @@
     }
     const createdAt = new Date();
     const action = resolveQuickNoteTitle(singleLog);
-    const lightUp = state.settings.hubConnected;
+    // 旧字段：v3 起不再写 true，点亮由 state.forest.lightups 表达
+    const lightUp = false;
     const newEvent = {
       id: createId(),
       habitId: null,
@@ -480,7 +548,9 @@
       singleLog,
       source: "quick-note",
       durationMs: null,
-      report: buildQuickNoteReport(action, singleLog, createdAt, lightUp)
+      report: buildQuickNoteReport(action, singleLog, createdAt, lightUp),
+      nodeId: null,
+      treeId: null
     };
     state.events.unshift(newEvent);
     elements.timerSingleLogInput.value = "";
@@ -544,7 +614,10 @@
     const action = resolveSelectedAction(candidates);
     const habit = resolveSelectedHabit();
     const createdAt = new Date();
-    const lightUp = state.settings.hubConnected;
+    const aimNode = resolveAimNode();
+    const aimTree = aimNode ? getActiveTree() : null;
+    // 旧字段：v3 起不再写 true，点亮由 state.forest.lightups 表达
+    const lightUp = false;
     const singleLog = elements.timerSingleLogInput.value.trim();
     const newEvent = {
       id: createId(),
@@ -556,10 +629,15 @@
       singleLog,
       source: "timer",
       durationMs: elapsedMs,
-      report: buildTimerReport(action, elapsedMs, createdAt, lightUp, habit, singleLog)
+      report: buildTimerReport(action, elapsedMs, createdAt, lightUp, habit, singleLog),
+      nodeId: aimNode ? aimNode.id : null,
+      treeId: aimTree ? aimTree.tree.id : null
     };
 
     state.events.unshift(newEvent);
+    if (aimNode) {
+      createLightUpDraft(newEvent);
+    }
     state.timer.elapsedMs = 0;
     state.timer.running = false;
     state.timer.startedAt = null;
@@ -598,6 +676,7 @@
     renderPeriodViews();
     renderRecordTabs();
     renderTimer();
+    renderNodeControls();
     renderHabitReminder();
     renderBugList(currentBugList);
     renderBackupStatus();
@@ -608,10 +687,16 @@
     const todayCount = countEventsOnDate(state.events, new Date());
     const streak = countDailyStreak(state.events);
     const nodeCandidates = buildNodeCandidates(state.events);
+    const litNodeIds = new Set(
+      state.forest.lightups
+        .filter((lightUp) => lightUp.status === "confirmed")
+        .map((lightUp) => lightUp.nodeId)
+    );
     elements.overviewToday.textContent = `${todayCount} 次`;
     elements.overviewStreak.textContent = `${streak} 天`;
     elements.overviewActiveHabit.textContent = state.habit && state.habit.active ? state.habit.name : "未设置";
     elements.overviewNodeCandidates.textContent = `${nodeCandidates.length} 个`;
+    elements.overviewLitNodes.textContent = `${litNodeIds.size} / ${nodeIndex.size}`;
   }
 
   function renderHabit() {
@@ -683,7 +768,7 @@
             : event.source === "quick-note"
               ? "随手记"
               : "手动";
-        const lightUpText = event.lightUp ? "点亮事件" : "本地记录";
+        const lightUpText = escapeHtml(resolveEventLightUpBadge(event));
         return `
           <article class="done-item">
             <h4>${escapeHtml(event.title)}</h4>
@@ -710,7 +795,7 @@
         return `
           <article class="done-item">
             <h4>${escapeHtml(event.title)}</h4>
-            <div class="done-meta">${formatDateTime(event.createdAt)} · 随手记 · ${event.lightUp ? "点亮事件" : "本地记录"}</div>
+            <div class="done-meta">${formatDateTime(event.createdAt)} · 随手记 · ${escapeHtml(resolveEventLightUpBadge(event))}</div>
             <div class="habit-log">${escapeHtml(event.singleLog || "")}</div>
             <div class="item-actions">
               <button class="action-button" type="button" data-action="edit" data-source="event" data-id="${event.id}">编辑</button>
@@ -926,6 +1011,169 @@
         renderHabitPicker();
       });
     });
+  }
+
+  // 选择器、节点卡、#done-node-select 共用同一个 state.forest.selectedNodeId
+  function renderNodeControls() {
+    const available = nodeIndex.size > 0;
+    elements.nodeAimField.classList.toggle("hidden", !available);
+    elements.doneNodeField.classList.toggle("hidden", !available);
+    if (!available) {
+      elements.nodePicker.classList.add("hidden");
+      elements.nodePickerToggle.setAttribute("aria-expanded", "false");
+      elements.nodeCard.classList.add("hidden");
+    }
+    renderNodePicker();
+    renderNodeCard();
+    renderDoneNodeSelect();
+  }
+
+  function renderNodePicker() {
+    if (nodeIndex.size === 0) {
+      elements.nodePickerList.innerHTML = "";
+      return;
+    }
+    const selectedNodeId = state.forest.selectedNodeId;
+    const keyword = elements.nodePickerSearch.value.trim().toLowerCase();
+    const freeItem = `
+      <button class="node-picker-free${selectedNodeId ? "" : " active"}" type="button" data-node-free="true">
+        不挂节点（自由记录）
+      </button>
+    `;
+    const items = listNodes().filter((item) => {
+      return !keyword || nodeTitle(item.node).toLowerCase().includes(keyword);
+    });
+    elements.nodePickerList.innerHTML =
+      freeItem +
+      items
+        .map(
+          (item) => `
+      <button
+        class="habit-picker-item${item.node.id === selectedNodeId ? " active" : ""}"
+        type="button"
+        data-tree-id="${escapeAttribute(item.treeId)}"
+        data-node-id="${escapeAttribute(item.node.id)}"
+      >
+        ${escapeHtml(`${nodeTitle(item.node)} · 建议 ${item.node.estMinutes} 分钟`)}
+      </button>
+    `
+        )
+        .join("");
+
+    Array.from(elements.nodePickerList.querySelectorAll("button")).forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.nodeFree) {
+          setSelectedNode(null, null);
+          return;
+        }
+        setSelectedNode(button.dataset.treeId, button.dataset.nodeId);
+      });
+    });
+  }
+
+  function renderNodeCard() {
+    // 先清理、再消费一次性提示；已清理过时 prune 会早退，不会误伤提示
+    pruneStaleAim();
+    if (nodeIndex.size === 0) {
+      elements.nodeCard.classList.add("hidden");
+      return;
+    }
+    if (lastAimNotice) {
+      elements.nodeCardNotice.textContent = AIM_NOTICE_TEXT[lastAimNotice];
+      elements.nodeCardNotice.classList.remove("hidden");
+      lastAimNotice = null;
+    }
+    const tree = getActiveTree();
+    const treeId = tree ? tree.tree.id : null;
+    const node = resolveAimNode();
+    if (!node) {
+      elements.nodeAimLabel.textContent = "未瞄准节点";
+      elements.nodeCardTitle.textContent = "尚未瞄准节点";
+      elements.nodeCardMeta.textContent = "从选择器里挑一个节点，下一次正式记录会挂上它。";
+      elements.nodeCardGoal.textContent = "";
+      elements.nodeCardVerify.textContent = "";
+      elements.nodeCardTutorials.innerHTML = "";
+      elements.nodeClear.classList.add("hidden");
+      // 有失效提示时保留卡片，否则没有瞄准时不必占位
+      elements.nodeCard.classList.toggle("hidden", elements.nodeCardNotice.classList.contains("hidden"));
+      return;
+    }
+    const prereqs = getPrereqsOfNode(treeId, node.id);
+    const tutorials = getTutorialsForNode(treeId, node.id);
+    const prereqText = prereqs.map((item) => nodeTitle(item)).join("、");
+    elements.nodeAimLabel.textContent = `已瞄准：${nodeTitle(node)}`;
+    elements.nodeCardTitle.textContent = nodeTitle(node);
+    elements.nodeCardMeta.textContent = `建议 ${node.estMinutes} 分钟${prereqText ? ` · 推荐前置：${prereqText}` : ""}`;
+    elements.nodeCardGoal.textContent = node.goal || "暂无目标说明";
+    elements.nodeCardVerify.textContent = node.verifyHint || "暂无自证提示";
+    elements.nodeCardTutorials.innerHTML = tutorials.length
+      ? tutorials.map(renderTutorialCard).join("")
+      : `<div class="meta-note">这个节点还没有教程。</div>`;
+    elements.nodeClear.classList.remove("hidden");
+    elements.nodeCard.classList.remove("hidden");
+
+    Array.from(elements.nodeCardTutorials.querySelectorAll(".tutorial-toggle")).forEach((button) => {
+      button.addEventListener("click", () => {
+        toggleTutorial(button.dataset.tutorialId);
+      });
+    });
+  }
+
+  // 默认折叠：展开之前 method 不写进 DOM，折叠才能被断言而不是只做视觉隐藏
+  function renderTutorialCard(tutorial) {
+    const expanded = expandedTutorialIds.has(tutorial.id);
+    const method = expanded ? `<div class="habit-log">${escapeHtml(tutorial.method || "")}</div>` : "";
+    return `
+      <article class="done-item">
+        <div class="group-header">
+          <h4>${escapeHtml(tutorial.title || tutorial.id)}</h4>
+          <button
+            class="action-button tutorial-toggle"
+            type="button"
+            data-tutorial-id="${escapeAttribute(tutorial.id)}"
+            aria-expanded="${expanded}"
+          >
+            ${expanded ? "收起" : "展开"}
+          </button>
+        </div>
+        ${method}
+      </article>
+    `;
+  }
+
+  function toggleTutorial(tutorialId) {
+    if (!tutorialId) {
+      return;
+    }
+    if (expandedTutorialIds.has(tutorialId)) {
+      expandedTutorialIds.delete(tutorialId);
+    } else {
+      expandedTutorialIds.add(tutorialId);
+    }
+    renderNodeCard();
+  }
+
+  function renderDoneNodeSelect() {
+    const freeOption = `<option value="">不挂节点</option>`;
+    const items = listNodes();
+    if (!items.length) {
+      elements.doneNodeSelect.innerHTML = freeOption;
+      return;
+    }
+    elements.doneNodeSelect.innerHTML =
+      freeOption +
+      items
+        .map(
+          (item) => `
+      <option value="${escapeAttribute(item.node.id)}" data-tree-id="${escapeAttribute(item.treeId)}">
+        ${escapeHtml(`${nodeTitle(item.node)} · 建议 ${item.node.estMinutes} 分钟`)}
+      </option>
+    `
+        )
+        .join("");
+    const selectedNodeId = state.forest.selectedNodeId;
+    elements.doneNodeSelect.value =
+      selectedNodeId && items.some((item) => item.node.id === selectedNodeId) ? selectedNodeId : "";
   }
 
   function renderBackupStatus() {
@@ -1186,6 +1434,7 @@
       );
     }
     state = normalizeState(incoming);
+    rebuildLightUpIndex();
     saveState();
     render();
     showMessage(elements.backupStatus, "备份已导入，当前页面状态已经刷新。", true);
@@ -1593,6 +1842,208 @@
       console.warn("[forest] 未加载到种子树：请确认 seed-trees/seed-trees.js 与 index.html 一起分发。");
     }
     return trees;
+  }
+
+  function buildNodeIndex(trees) {
+    const index = new Map();
+    trees.forEach((tree) => {
+      (Array.isArray(tree.nodes) ? tree.nodes : []).forEach((node) => {
+        if (node && typeof node.id === "string" && node.id) {
+          index.set(`${tree.tree.id}::${node.id}`, node);
+        }
+      });
+    });
+    return index;
+  }
+
+  function buildTutorialIndex(trees) {
+    const index = new Map();
+    trees.forEach((tree) => {
+      (Array.isArray(tree.tutorials) ? tree.tutorials : []).forEach((tutorial) => {
+        if (!tutorial || typeof tutorial.id !== "string" || typeof tutorial.nodeId !== "string") {
+          return;
+        }
+        const key = `${tree.tree.id}::${tutorial.nodeId}`;
+        index.set(key, (index.get(key) || []).concat(tutorial));
+      });
+    });
+    return index;
+  }
+
+  function listNodes() {
+    const items = [];
+    seedTrees.forEach((tree) => {
+      (Array.isArray(tree.nodes) ? tree.nodes : []).forEach((node) => {
+        items.push({ treeId: tree.tree.id, node });
+      });
+    });
+    return items;
+  }
+
+  function nodeTitle(node) {
+    return node && typeof node.title === "string" && node.title ? node.title : node && node.id ? node.id : "";
+  }
+
+  function getActiveTree() {
+    return seedTrees.find((tree) => tree.tree.id === state.forest.activeTreeId) || seedTrees[0] || null;
+  }
+
+  function getNodeById(treeId, nodeId) {
+    if (!treeId || !nodeId) {
+      return null;
+    }
+    return nodeIndex.get(`${treeId}::${nodeId}`) || null;
+  }
+
+  function getTutorialsForNode(treeId, nodeId) {
+    return tutorialIndex.get(`${treeId}::${nodeId}`) || [];
+  }
+
+  function getPrereqsOfNode(treeId, nodeId) {
+    const tree = seedTrees.find((item) => item.tree.id === treeId);
+    if (!tree || !Array.isArray(tree.edges)) {
+      return [];
+    }
+    return tree.edges
+      .filter((edge) => edge && edge.type === "prereq" && edge.to === nodeId)
+      .map((edge) => getNodeById(treeId, edge.from))
+      .filter(Boolean);
+  }
+
+  function resolveNodeTitle(treeId, nodeId) {
+    return nodeTitle(getNodeById(treeId, nodeId)) || nodeId;
+  }
+
+  // lightups 只有这一份内存索引：凡是改动 state.forest.lightups 的路径都必须重建，
+  // 否则事件徽标会读到旧索引。PR-4 的 confirmLightUp()、deleteLightUp() 与
+  // handleRecordActions() 里删除事件时的级联清理加入时，要在这里同步补一次重建。
+  function rebuildLightUpIndex() {
+    lightUpByEventId = new Map();
+    state.forest.lightups.forEach((lightUp) => {
+      if (lightUp && typeof lightUp.eventId === "string" && lightUp.eventId) {
+        lightUpByEventId.set(lightUp.eventId, lightUp);
+      }
+    });
+  }
+
+  function findLightUpByEventId(id) {
+    return lightUpByEventId.get(id) || null;
+  }
+
+  // 「点亮」只有一个真相来源：state.forest.lightups。event.lightUp 是 v2 遗留布尔，
+  // v3 起恒为 false，只用于给老数据一个诚实的旧标签。
+  function resolveEventLightUpBadge(event) {
+    const own = findLightUpByEventId(event.id);
+    if (own && own.status === "confirmed") {
+      return `已点亮 · ${resolveNodeTitle(own.treeId, own.nodeId)}`;
+    }
+    if (own) {
+      return `点亮草稿 · ${resolveNodeTitle(own.treeId, own.nodeId)}`;
+    }
+    if (event.lightUp) {
+      return "旧标记（未确认）";
+    }
+    return "本地记录";
+  }
+
+  // 唯一的瞄准写入者：nodeId 为 null 即清除瞄准
+  function setSelectedNode(treeId, nodeId) {
+    if (!nodeId) {
+      state.forest.selectedNodeId = null;
+      state.forest.selectedNodeAt = null;
+    } else {
+      state.forest.selectedNodeId = nodeId;
+      state.forest.selectedNodeAt = new Date().toISOString();
+      if (treeId) {
+        state.forest.activeTreeId = treeId;
+      }
+    }
+    clearNodeCardNotice();
+    saveState();
+    // 选节点是高频动作：只重渲染森林控件与计时读数，不跑全量 render()
+    renderNodeControls();
+    renderTimer();
+  }
+
+  function clearNodeCardNotice() {
+    if (!elements.nodeCardNotice) {
+      return;
+    }
+    elements.nodeCardNotice.textContent = "";
+    elements.nodeCardNotice.classList.add("hidden");
+  }
+
+  // 纯查询：不写状态、不打日志；UI 只读它的返回值
+  function resolveAimNode() {
+    const { selectedNodeId, selectedNodeAt } = state.forest;
+    if (!selectedNodeId) {
+      return null;
+    }
+    const stamp = selectedNodeAt ? new Date(selectedNodeAt).getTime() : 0;
+    if (!stamp || Date.now() - stamp > AIM_TTL_MS) {
+      return null;
+    }
+    const tree = getActiveTree();
+    return tree ? getNodeById(tree.tree.id, selectedNodeId) : null;
+  }
+
+  // 唯一的「清理 + 告知」点：启动后与每次 renderNodeCard() 时调用。
+  // 悬空判定独立于 TTL，否则「时间戳很旧的悬空 id」会被当成自然超时静默清掉。
+  function pruneStaleAim() {
+    const { selectedNodeId, selectedNodeAt } = state.forest;
+    if (!selectedNodeId) {
+      return null;
+    }
+    const stamp = selectedNodeAt ? new Date(selectedNodeAt).getTime() : 0;
+    // 只有能证明过期的正时间戳才清理：导入的瞄准可能没有时间戳，不能据此删掉用户数据
+    const expired = stamp > 0 && Date.now() - stamp > AIM_TTL_MS;
+    const tree = getActiveTree();
+    const treeId = tree ? tree.tree.id : null;
+    const dangling = nodeIndex.size > 0 && !nodeIndex.has(`${treeId}::${selectedNodeId}`);
+    if (!expired && !dangling) {
+      return null;
+    }
+    if (dangling) {
+      console.warn("[forest] 节点不在已加载的树中，已清除瞄准", treeId, selectedNodeId);
+    }
+    state.forest.selectedNodeId = null;
+    state.forest.selectedNodeAt = null;
+    lastAimNotice = dangling ? "dangling" : "expired";
+    saveState();
+    return lastAimNotice;
+  }
+
+  // 追加草稿；同一 eventId 已有则返回既有记录。成功后消费瞄准（一次选择最多产出一条草稿）。
+  // 节点无效时静默返回 null、不改状态：调用方只在 resolveAimNode() 有值时进来。
+  function createLightUpDraft(event) {
+    const existing = findLightUpByEventId(event.id);
+    if (existing) {
+      return existing;
+    }
+    const node = resolveAimNode();
+    if (!node) {
+      return null;
+    }
+    const tree = getActiveTree();
+    const lightUp = normalizeLightUp({
+      id: createId(),
+      treeId: tree ? tree.tree.id : null,
+      nodeId: node.id,
+      status: "draft",
+      evidence: {
+        type: "self",
+        detail: event.singleLog || event.title,
+        timestamp: event.createdAt
+      },
+      eventId: event.id,
+      habitId: event.habitId,
+      createdAt: event.createdAt
+    });
+    state.forest.lightups.unshift(lightUp);
+    rebuildLightUpIndex();
+    state.forest.selectedNodeId = null;
+    state.forest.selectedNodeAt = null;
+    return lightUp;
   }
 
   function normalizeState(raw) {
