@@ -188,6 +188,50 @@ describe("light-up drafts from aimed events", () => {
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("treats a missing timestamp as expired even when the node exists", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    loadApp({
+      seedState: seedState({
+        forest: { activeTreeId: TREE_ID, selectedNodeId: NODE_ID, selectedNodeAt: null, lightups: [] }
+      })
+    });
+
+    const notice = document.getElementById("node-card-notice");
+    expect(notice.textContent).toBe("上次的瞄准已过期，请重新选择节点");
+    expect(getState().forest.selectedNodeId).toBeNull();
+    // 节点还在，属于自然超时：不打日志
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    finishTimer();
+
+    expect(getState().events[0].nodeId).toBeNull();
+    expect(getState().forest.lightups).toHaveLength(0);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("warns for a missing node even when the timestamp is old", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const nineHoursAgo = new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString();
+
+    loadApp({
+      seedState: seedState({
+        forest: {
+          activeTreeId: TREE_ID,
+          selectedNodeId: "not-a-node",
+          selectedNodeAt: nineHoursAgo,
+          lightups: []
+        }
+      })
+    });
+
+    // 悬空优先于过期：过期也成立时仍按悬空报，并打唯一一条 warn
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]).toContain("not-a-node");
+    expect(document.getElementById("node-card-notice").textContent).toBe("上次瞄准的节点已不存在，已清除瞄准");
+    expect(getState().forest.selectedNodeId).toBeNull();
+  });
+
   it("decides the event badge from lightups first, then the legacy flag", () => {
     loadApp({
       seedState: {

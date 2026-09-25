@@ -1995,8 +1995,8 @@
       return null;
     }
     const stamp = selectedNodeAt ? new Date(selectedNodeAt).getTime() : 0;
-    // 只有能证明过期的正时间戳才清理：导入的瞄准可能没有时间戳，不能据此删掉用户数据
-    const expired = stamp > 0 && Date.now() - stamp > AIM_TTL_MS;
+    // 与 resolveAimNode() 同一条过期规则：没有时间戳（或时间戳无法解析）即视为过期
+    const expired = !stamp || Date.now() - stamp > AIM_TTL_MS;
     const tree = getActiveTree();
     const treeId = tree ? tree.tree.id : null;
     const dangling = nodeIndex.size > 0 && !nodeIndex.has(`${treeId}::${selectedNodeId}`);

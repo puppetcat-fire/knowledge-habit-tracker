@@ -161,6 +161,8 @@ describe("state migration to version 3", () => {
       version: 3,
       forest: {
         selectedNodeId: "linear-equation",
+        // 瞄准必须有时间戳，否则导入后的第一次 render 会按过期清理（§4.6.1）
+        selectedNodeAt: new Date().toISOString(),
         lightups: [
           { nodeId: "   " },
           { treeId: "k9-math" },
