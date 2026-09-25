@@ -124,6 +124,14 @@
           android:layout_height="wrap_content"
           android:layout_marginTop="8dp"
           android:text="@string/reset_timer" />
+
+        <com.google.android.material.button.MaterialButton
+          android:id="@+id/forestButton"
+          style="@style/Widget.Material3.Button.TonalButton"
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:layout_marginTop="16dp"
+          android:text="进入森林（知识树）" />
       </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
   </LinearLayout>

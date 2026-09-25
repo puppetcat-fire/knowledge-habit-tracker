@@ -12,48 +12,9 @@
   </head>
   <body>
     <div class="app-shell">
-      <header class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Knowledge Habit Tracker</p>
-          <h1>点亮习惯记录器</h1>
-          <p class="subtitle">
-            一次只做一件事。习惯、事件、计时和备份默认都只运行在本地沙箱里，再把“谁在什么时候做了什么”沉淀成节点。
-          </p>
-        </div>
-
-        <div class="hero-side">
-          <label class="toggle-card" for="hub-connected">
-            <span class="toggle-title">同步到知识共建平台</span>
-            <span class="toggle-help">打开后，记录会被标记为“点亮事件”</span>
-            <span class="toggle-row">
-              <input id="hub-connected" type="checkbox" />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </span>
-          </label>
-        </div>
-      </header>
-
-      <section class="overview-grid" aria-label="今日概览">
-        <article class="overview-card">
-          <span class="overview-label">今日已记录</span>
-          <strong id="overview-today" class="overview-value">0 次</strong>
-        </article>
-        <article class="overview-card">
-          <span class="overview-label">连续天数</span>
-          <strong id="overview-streak" class="overview-value">0 天</strong>
-        </article>
-        <article class="overview-card">
-          <span class="overview-label">当前习惯</span>
-          <strong id="overview-active-habit" class="overview-value">未设置</strong>
-        </article>
-        <article class="overview-card">
-          <span class="overview-label">节点候选</span>
-          <strong id="overview-node-candidates" class="overview-value">0 个</strong>
-        </article>
-      </section>
-
       <nav class="nav" aria-label="主导航">
         <button class="nav-button active" type="button" data-page-target="timer">专注计时</button>
+        <button class="nav-button" type="button" data-page-target="overview">概览</button>
         <button class="nav-button" type="button" data-page-target="habit">习惯与事件</button>
         <button class="nav-button" type="button" data-page-target="bug">反馈与安全</button>
       </nav>
@@ -132,15 +93,57 @@
                   maxlength="400"
                   placeholder="例如：卡住点、环境信息、临时决定、情绪状态"
                 ></textarea>
+                <div class="quick-note-actions">
+                  <span class="meta-note">支持 Ctrl/Cmd + Enter 直接提交。</span>
+                  <button id="timer-quick-save" class="secondary" type="button">随手记</button>
+                </div>
               </label>
-              <div class="quick-note-actions">
-                <span class="meta-note">适合随手记一句。支持 Ctrl/Cmd + Enter 直接提交。</span>
-                <button id="timer-quick-save" class="secondary" type="button">单次提交随手记</button>
-              </div>
             </div>
 
             <div id="timer-report" class="report hidden"></div>
           </div>
+        </section>
+
+        <section class="page hidden" data-page="overview">
+          <header class="hero">
+            <div class="hero-copy">
+              <p class="eyebrow">Knowledge Habit Tracker</p>
+              <h1>点亮习惯记录器</h1>
+              <p class="subtitle">
+                一次只做一件事。习惯、事件、计时和备份默认都只运行在本地沙箱里，再把“谁在什么时候做了什么”沉淀成节点。
+              </p>
+            </div>
+
+            <div class="hero-side">
+              <label class="toggle-card" for="hub-connected">
+                <span class="toggle-title">同步到知识共建平台</span>
+                <span class="toggle-help">打开后，记录会被标记为“点亮事件”</span>
+                <span class="toggle-row">
+                  <input id="hub-connected" type="checkbox" />
+                  <span class="toggle-switch" aria-hidden="true"></span>
+                </span>
+              </label>
+            </div>
+          </header>
+
+          <section class="overview-grid" aria-label="今日概览">
+            <article class="overview-card">
+              <span class="overview-label">今日已记录</span>
+              <strong id="overview-today" class="overview-value">0 次</strong>
+            </article>
+            <article class="overview-card">
+              <span class="overview-label">连续天数</span>
+              <strong id="overview-streak" class="overview-value">0 天</strong>
+            </article>
+            <article class="overview-card">
+              <span class="overview-label">当前习惯</span>
+              <strong id="overview-active-habit" class="overview-value">未设置</strong>
+            </article>
+            <article class="overview-card">
+              <span class="overview-label">节点候选</span>
+              <strong id="overview-node-candidates" class="overview-value">0 个</strong>
+            </article>
+          </section>
         </section>
 
         <section class="page hidden" data-page="habit">

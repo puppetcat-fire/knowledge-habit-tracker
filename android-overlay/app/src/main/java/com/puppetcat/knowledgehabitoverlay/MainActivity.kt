@@ -90,6 +90,10 @@ class MainActivity : AppCompatActivity() {
       startService(OverlayTimerService.createIntent(this, OverlayTimerService.ACTION_RESET_TIMER))
       render()
     }
+
+    findViewById<MaterialButton>(R.id.forestButton).setOnClickListener {
+      startActivity(Intent(this, ForestActivity::class.java))
+    }
   }
 
   private fun render() {
