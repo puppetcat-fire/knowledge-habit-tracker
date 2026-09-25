@@ -159,16 +159,21 @@
   };
 
   bindEvents();
-  elements.hubToggle.checked = state.settings.hubConnected;
+  // hub 开关已从 index.html 移除；settings.hubConnected 仅为兼容历史备份保留
+  if (elements.hubToggle) {
+    elements.hubToggle.checked = state.settings.hubConnected;
+  }
   render();
   startTimerTicker();
 
   function bindEvents() {
-    elements.hubToggle.addEventListener("change", () => {
-      state.settings.hubConnected = elements.hubToggle.checked;
-      saveState();
-      renderDoneList();
-    });
+    if (elements.hubToggle) {
+      elements.hubToggle.addEventListener("change", () => {
+        state.settings.hubConnected = elements.hubToggle.checked;
+        saveState();
+        renderDoneList();
+      });
+    }
 
     elements.navButtons.forEach((button) => {
       button.addEventListener("click", () => {

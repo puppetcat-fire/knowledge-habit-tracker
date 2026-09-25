@@ -155,17 +155,6 @@
                 一次只做一件事。习惯、事件、计时和备份默认都只运行在本地沙箱里，再把“谁在什么时候做了什么”沉淀成节点。
               </p>
             </div>
-
-            <div class="hero-side">
-              <label class="toggle-card" for="hub-connected">
-                <span class="toggle-title">同步到知识共建平台</span>
-                <span class="toggle-help">打开后，记录会被标记为“点亮事件”</span>
-                <span class="toggle-row">
-                  <input id="hub-connected" type="checkbox" />
-                  <span class="toggle-switch" aria-hidden="true"></span>
-                </span>
-              </label>
-            </div>
           </header>
 
           <section class="overview-grid" aria-label="今日概览">
@@ -347,6 +336,7 @@
                     <div>
                       <h2>节点候选</h2>
                       <p>只从正式事件里抽候选，不吃随手记。</p>
+                      <p class="meta-note">候选是已经做过的重复动作，不是森林节点（节点是要达成的目标），也不会被自动升格。</p>
                     </div>
                   </div>
                   <div id="node-candidate-list" class="done-list"></div>

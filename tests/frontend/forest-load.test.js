@@ -49,4 +49,11 @@ describe("seed tree loading", () => {
     expect(() => loadApp({ seedState: V2_STATE, withSeedBundle: false })).not.toThrow();
     expect(document.getElementById("habit-title").textContent).toBe("阅读");
   });
+
+  it("boots and renders when the document has no hub toggle", () => {
+    loadApp();
+
+    expect(document.getElementById("hub-connected")).toBeNull();
+    expect(document.getElementById("overview-today").textContent).toBe("0 次");
+  });
 });
