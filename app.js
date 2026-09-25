@@ -4,9 +4,10 @@
   const CUSTOM_HABIT_NAME = "自由记录";
   const MAX_BUG_CACHE = 20;
   const TREE_FORMAT = "forest-tree/v1";
+  const STATE_VERSION = 3;
 
   const defaultState = {
-    version: 2,
+    version: STATE_VERSION,
     habit: null,
     habitHistory: [],
     events: [],
@@ -22,6 +23,12 @@
     settings: {
       hubConnected: false,
       lastBackupAt: null
+    },
+    forest: {
+      activeTreeId: null,
+      selectedNodeId: null,
+      selectedNodeAt: null,
+      lightups: []
     }
   };
 
@@ -1171,7 +1178,14 @@
 
   function importBackup(text) {
     const parsed = JSON.parse(text);
-    state = normalizeState(parsed.state || parsed);
+    const incoming = parsed && parsed.state ? parsed.state : parsed;
+    const incomingVersion = Number(incoming && incoming.version) || 1;
+    if (incomingVersion > STATE_VERSION) {
+      throw new Error(
+        `备份来自更新的版本（v${incomingVersion}），当前只支持到 v${STATE_VERSION}。请先升级页面。`
+      );
+    }
+    state = normalizeState(incoming);
     saveState();
     render();
     showMessage(elements.backupStatus, "备份已导入，当前页面状态已经刷新。", true);
@@ -1586,7 +1600,7 @@
     const timer = candidate.timer && typeof candidate.timer === "object" ? candidate.timer : {};
     const settings = candidate.settings && typeof candidate.settings === "object" ? candidate.settings : {};
     return {
-      version: defaultState.version,
+      version: STATE_VERSION,
       habit: normalizeHabit(candidate.habit, true),
       habitHistory: Array.isArray(candidate.habitHistory)
         ? candidate.habitHistory.map((habit) => normalizeHabit(habit, false)).filter(Boolean)
@@ -1609,7 +1623,46 @@
       settings: {
         hubConnected: Boolean(settings.hubConnected),
         lastBackupAt: typeof settings.lastBackupAt === "string" ? settings.lastBackupAt : null
-      }
+      },
+      forest: normalizeForest(candidate.forest)
+    };
+  }
+
+  function normalizeForest(raw) {
+    const forest = raw && typeof raw === "object" ? raw : {};
+    return {
+      activeTreeId: typeof forest.activeTreeId === "string" && forest.activeTreeId ? forest.activeTreeId : null,
+      selectedNodeId:
+        typeof forest.selectedNodeId === "string" && forest.selectedNodeId ? forest.selectedNodeId : null,
+      selectedNodeAt: typeof forest.selectedNodeAt === "string" ? forest.selectedNodeAt : null,
+      lightups: Array.isArray(forest.lightups) ? forest.lightups.map(normalizeLightUp).filter(Boolean) : []
+    };
+  }
+
+  function normalizeLightUp(raw) {
+    if (!raw || typeof raw !== "object") {
+      return null;
+    }
+    if (typeof raw.nodeId !== "string" || !raw.nodeId.trim()) {
+      return null;
+    }
+    const evidence = raw.evidence && typeof raw.evidence === "object" ? raw.evidence : {};
+    return {
+      id: typeof raw.id === "string" && raw.id ? raw.id : createId(),
+      treeId: typeof raw.treeId === "string" && raw.treeId ? raw.treeId : null,
+      nodeId: raw.nodeId.trim(),
+      tutorialId: typeof raw.tutorialId === "string" && raw.tutorialId ? raw.tutorialId : null,
+      status: raw.status === "confirmed" ? "confirmed" : "draft",
+      evidence: {
+        type: "self",
+        detail: typeof evidence.detail === "string" ? evidence.detail : "",
+        timestamp: typeof evidence.timestamp === "string" ? evidence.timestamp : new Date().toISOString()
+      },
+      eventId: typeof raw.eventId === "string" && raw.eventId ? raw.eventId : null,
+      habitId: typeof raw.habitId === "string" && raw.habitId ? raw.habitId : null,
+      createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
+      confirmedAt: typeof raw.confirmedAt === "string" ? raw.confirmedAt : null,
+      verified: false
     };
   }
 
@@ -1644,6 +1697,8 @@
       habitId: typeof rawEvent.habitId === "string" && rawEvent.habitId ? rawEvent.habitId : null,
       habitName: typeof rawEvent.habitName === "string" && rawEvent.habitName ? rawEvent.habitName : null,
       title: rawEvent.title.trim(),
+      nodeId: typeof rawEvent.nodeId === "string" && rawEvent.nodeId ? rawEvent.nodeId : null,
+      treeId: typeof rawEvent.treeId === "string" && rawEvent.treeId ? rawEvent.treeId : null,
       createdAt: typeof rawEvent.createdAt === "string" ? rawEvent.createdAt : new Date().toISOString(),
       lightUp: Boolean(rawEvent.lightUp),
       singleLog: typeof rawEvent.singleLog === "string" ? rawEvent.singleLog : "",
