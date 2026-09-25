@@ -9,7 +9,8 @@ const PUBLIC_FILES = new Map([
   ["/app.js", "app.js"],
   ["/style.css", "style.css"],
   ["/overlay.html", "overlay.html"],
-  ["/overlay.js", "overlay.js"]
+  ["/overlay.js", "overlay.js"],
+  ["/seed-trees/seed-trees.js", "seed-trees/seed-trees.js"]
 ]);
 
 function createApp(overrides = {}) {

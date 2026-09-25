@@ -20,7 +20,7 @@ module.exports = [
     }
   },
   {
-    files: ["tests/**/*.test.js"],
+    files: ["tests/**/*.js"],
     languageOptions: {
       globals: {
         ...globals.browser,

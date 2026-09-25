@@ -3,6 +3,7 @@
   const BUG_CACHE_KEY = "knowledge-habit-tracker-bugs";
   const CUSTOM_HABIT_NAME = "自由记录";
   const MAX_BUG_CACHE = 20;
+  const TREE_FORMAT = "forest-tree/v1";
 
   const defaultState = {
     version: 2,
@@ -25,6 +26,7 @@
   };
 
   let state = loadState();
+  loadSeedTrees();
   let activeRange = "all";
   let activePage = "timer";
   let activeRecordTab = "events";
@@ -1563,6 +1565,20 @@
     } catch {
       return cloneDefaultState();
     }
+  }
+
+  function loadSeedTrees() {
+    const bundled = window.FOREST_SEED_TREES;
+    const list = Array.isArray(bundled)
+      ? bundled
+      : bundled && typeof bundled === "object" ? Object.values(bundled) : [];
+    const trees = list.filter(
+      (tree) => tree && tree.format === TREE_FORMAT && tree.tree && typeof tree.tree.id === "string"
+    );
+    if (!trees.length) {
+      console.warn("[forest] 未加载到种子树：请确认 seed-trees/seed-trees.js 与 index.html 一起分发。");
+    }
+    return trees;
   }
 
   function normalizeState(raw) {

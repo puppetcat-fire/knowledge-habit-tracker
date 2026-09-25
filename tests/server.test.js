@@ -33,6 +33,17 @@ describe("server", () => {
     expect(response.status).toBe(404);
   });
 
+  it("serves the generated seed tree bundle", async () => {
+    const response = await request(app).get("/seed-trees/seed-trees.js");
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("javascript");
+  });
+
+  it("does not expose the seed tree json source", async () => {
+    const response = await request(app).get("/seed-trees/k9-math.json");
+    expect(response.status).toBe(404);
+  });
+
   it("stores bug reports after validation and hides private fields from listing", async () => {
     const createResponse = await request(app).post("/api/bugs").send({
       title: "<script>alert(1)</script> 本地问题",

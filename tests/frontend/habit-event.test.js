@@ -1,41 +1,4 @@
-const fs = require("fs");
-const path = require("path");
-
-function loadApp() {
-  const html = fs.readFileSync(path.join(__dirname, "../../index.html"), "utf-8");
-  document.documentElement.innerHTML = html;
-  localStorage.clear();
-
-  const uuid = () => `id-${Math.random().toString(16).slice(2, 10)}`;
-  if (globalThis.crypto && typeof globalThis.crypto === "object") {
-    Object.defineProperty(globalThis.crypto, "randomUUID", {
-      value: uuid,
-      configurable: true
-    });
-  } else {
-    Object.defineProperty(globalThis, "crypto", {
-      value: { randomUUID: uuid },
-      configurable: true
-    });
-  }
-
-  global.alert = vi.fn();
-  global.confirm = vi.fn(() => true);
-  global.fetch = vi.fn(() =>
-    Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ ok: true, bugs: [] })
-    })
-  );
-
-  const appPath = path.join(__dirname, "../../app.js");
-  delete require.cache[require.resolve(appPath)];
-  require(appPath);
-}
-
-function getState() {
-  return JSON.parse(localStorage.getItem("knowledge-habit-tracker"));
-}
+const { loadApp, getState } = require("./harness");
 
 describe("habit and event CRUD", () => {
   beforeEach(() => {
