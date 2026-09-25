@@ -36,6 +36,9 @@ Thumbs.db
 **/build/
 **/local.properties
 
+# Build artifacts
+*.apk
+
 # Package lock
 package-lock.json
 
