@@ -310,3 +310,147 @@ describe("light-up drafts from aimed events", () => {
     expect(document.getElementById("quick-note-list").textContent).toContain("旧标记（未确认）");
   });
 });
+
+describe("confirm and delete local light-ups", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function openLightupTab() {
+    document.querySelector("[data-record-tab-target='lightups']").click();
+  }
+
+  function confirmFirstLightUp() {
+    document.querySelector("#lightup-list [data-action='confirm']").click();
+  }
+
+  it("confirms a draft from the lightups tab and flips the badge", () => {
+    loadApp({ seedState: seedState() });
+
+    aim();
+    finishTimer();
+    openLightupTab();
+
+    expect(document.getElementById("lightup-list").textContent).toContain("点亮草稿 · 一元一次方程");
+
+    confirmFirstLightUp();
+
+    const state = getState();
+    expect(state.forest.lightups).toHaveLength(1);
+    expect(state.forest.lightups[0].status).toBe("confirmed");
+    expect(state.forest.lightups[0].confirmedAt).toBeTruthy();
+
+    // 徽标按 §4.6.5：已确认 > 草稿
+    expect(document.getElementById("lightup-list").textContent).toContain("已点亮 · 一元一次方程");
+    expect(document.getElementById("done-list").textContent).toContain("已点亮 · 一元一次方程");
+
+    const nodeItems = Array.from(document.querySelectorAll("#forest-node-list .done-item"));
+    const litItem = nodeItems.find((item) => item.textContent.includes("一元一次方程"));
+    expect(litItem.textContent).toContain("●");
+    // 概览计数：分子 1，分母从已加载节点索引派生（不硬编码节点数）
+    expect(document.getElementById("overview-lit-nodes").textContent).toBe(`1 / ${nodeItems.length}`);
+  });
+
+  it("keeps confirmedAt when the same light-up is confirmed again", () => {
+    loadApp({ seedState: seedState() });
+
+    aim();
+    finishTimer();
+    openLightupTab();
+
+    confirmFirstLightUp();
+    const firstConfirmedAt = getState().forest.lightups[0].confirmedAt;
+
+    confirmFirstLightUp();
+
+    const state = getState();
+    expect(state.forest.lightups).toHaveLength(1);
+    expect(state.forest.lightups[0].status).toBe("confirmed");
+    expect(state.forest.lightups[0].confirmedAt).toBe(firstConfirmedAt);
+  });
+
+  it("removes a light-up from the tab without touching the event", () => {
+    loadApp({ seedState: seedState() });
+
+    aim();
+    finishTimer();
+    openLightupTab();
+
+    document.querySelector("#lightup-list [data-action='delete']").click();
+
+    const state = getState();
+    expect(state.forest.lightups).toHaveLength(0);
+    expect(state.events).toHaveLength(1);
+    expect(document.getElementById("lightup-list").textContent).toContain("还没有点亮记录");
+    expect(document.getElementById("done-list").textContent).toContain("本地记录");
+  });
+
+  it("cascade-deletes only draft light-ups when their event is deleted", () => {
+    loadApp({
+      seedState: {
+        version: 3,
+        events: [
+          {
+            id: "e-a",
+            habitId: null,
+            habitName: null,
+            title: "带草稿的事件",
+            createdAt: "2026-09-23T10:00:00.000Z",
+            lightUp: false,
+            singleLog: "讲了移项",
+            source: "timer",
+            durationMs: 600000,
+            report: ""
+          },
+          {
+            id: "e-b",
+            habitId: null,
+            habitName: null,
+            title: "带已确认点亮的事件",
+            createdAt: "2026-09-24T10:00:00.000Z",
+            lightUp: false,
+            singleLog: "合并了同类项",
+            source: "manual",
+            durationMs: null,
+            report: ""
+          }
+        ],
+        forest: {
+          lightups: [
+            {
+              id: "l-draft",
+              treeId: TREE_ID,
+              nodeId: NODE_ID,
+              status: "draft",
+              eventId: "e-a",
+              evidence: { type: "self", detail: "讲了移项", timestamp: "2026-09-23T10:00:00.000Z" }
+            },
+            {
+              id: "l-confirmed",
+              treeId: TREE_ID,
+              nodeId: "like-terms",
+              status: "confirmed",
+              confirmedAt: "2026-09-24T11:00:00.000Z",
+              eventId: "e-b",
+              evidence: { type: "self", detail: "合并了同类项", timestamp: "2026-09-24T10:00:00.000Z" }
+            }
+          ]
+        }
+      }
+    });
+
+    // 草稿是"尚未声明的证据副本"：事件没了，草稿跟着走
+    document.querySelector("#done-list [data-action='delete'][data-id='e-a']").click();
+
+    let state = getState();
+    expect(state.forest.lightups.map((item) => item.id)).toEqual(["l-confirmed"]);
+
+    // 已确认的点亮是追加式声明：删掉它所属的事件也保留
+    document.querySelector("#done-list [data-action='delete'][data-id='e-b']").click();
+
+    state = getState();
+    expect(state.events).toHaveLength(0);
+    expect(state.forest.lightups.map((item) => item.id)).toEqual(["l-confirmed"]);
+    expect(document.getElementById("lightup-list").textContent).toContain("已点亮 · 合并同类项");
+  });
+});

@@ -95,6 +95,9 @@
     recordSections: Array.from(document.querySelectorAll(".record-section")),
     doneList: document.getElementById("done-list"),
     quickNoteList: document.getElementById("quick-note-list"),
+    lightupTabButton: document.getElementById("lightup-tab"),
+    forestNodeList: document.getElementById("forest-node-list"),
+    lightupList: document.getElementById("lightup-list"),
     eventSearchInput: document.getElementById("event-search"),
     filterButtons: Array.from(document.querySelectorAll(".filter")),
     battleReport: document.getElementById("battle-report"),
@@ -323,6 +326,7 @@
     elements.doneList.addEventListener("click", handleRecordActions);
     elements.quickNoteList.addEventListener("click", handleRecordActions);
     elements.habitHistoryList.addEventListener("click", handleRecordActions);
+    elements.lightupList.addEventListener("click", handleRecordActions);
 
     elements.backupExportButton.addEventListener("click", () => {
       exportBackup();
@@ -398,9 +402,23 @@
           return;
         }
         state.events = state.events.filter((item) => item.id !== id);
-        // PR-4：删除事件时还要级联清掉它的 draft lightup，并 rebuildLightUpIndex()
+        // 事件是个人数据，可物理删除；草稿只是"尚未声明的证据副本"，证据没了就该走。
+        // 已 confirmed 的点亮是追加式声明，保留（见二期 §C3）。
+        state.forest.lightups = state.forest.lightups.filter(
+          (lightUp) => lightUp.eventId !== id || lightUp.status === "confirmed"
+        );
+        rebuildLightUpIndex();
         saveState();
         render();
+      }
+      return;
+    }
+
+    if (source === "lightup") {
+      if (action === "confirm") {
+        confirmLightUp(id);
+      } else if (action === "delete") {
+        deleteLightUp(id);
       }
       return;
     }
@@ -671,6 +689,8 @@
     renderHabitHistory();
     renderDoneList();
     renderQuickNoteList();
+    renderForestNodeList();
+    renderLightUpList();
     renderNodeCandidates();
     renderHabitEventGroups();
     renderPeriodViews();
@@ -800,6 +820,67 @@
             <div class="item-actions">
               <button class="action-button" type="button" data-action="edit" data-source="event" data-id="${event.id}">编辑</button>
               <button class="action-button danger" type="button" data-action="delete" data-source="event" data-id="${event.id}">删除</button>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  // 种子树缺失时森林功能区整体隐藏，点亮页签也没什么可看的
+  function renderForestNodeList() {
+    const available = nodeIndex.size > 0;
+    elements.lightupTabButton.classList.toggle("hidden", !available);
+    if (!available) {
+      elements.forestNodeList.innerHTML = "";
+      return;
+    }
+    const litNodeIds = new Set(
+      state.forest.lightups
+        .filter((lightUp) => lightUp.status === "confirmed")
+        .map((lightUp) => lightUp.nodeId)
+    );
+    elements.forestNodeList.innerHTML = listNodes()
+      .map(({ node }) => {
+        const marker = litNodeIds.has(node.id) ? "● 已点亮" : "○ 未点亮";
+        const minutes = Number(node.estMinutes) > 0 ? ` · 建议 ${node.estMinutes} 分钟` : "";
+        return `
+          <article class="done-item">
+            <h4>${escapeHtml(nodeTitle(node))}</h4>
+            <div class="done-meta">${marker}${minutes}</div>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  function renderLightUpList() {
+    if (nodeIndex.size === 0) {
+      elements.lightupList.innerHTML = "";
+      return;
+    }
+    if (!state.forest.lightups.length) {
+      elements.lightupList.innerHTML = createEmptyCard("还没有点亮记录。完成一次挂节点的记录后，这里会出现草稿。");
+      return;
+    }
+    // 草稿排最前：它们还等着一次确认；sort 稳定，同状态内保持原有顺序
+    const ordered = state.forest.lightups
+      .slice()
+      .sort((a, b) => (a.status === b.status ? 0 : a.status === "draft" ? -1 : 1));
+    elements.lightupList.innerHTML = ordered
+      .map((lightUp) => {
+        const badge = `${lightUp.status === "confirmed" ? "已点亮" : "点亮草稿"} · ${resolveNodeTitle(lightUp.treeId, lightUp.nodeId)}`;
+        const detail = lightUp.evidence && lightUp.evidence.detail
+          ? `<div class="habit-log">${escapeHtml(lightUp.evidence.detail)}</div>`
+          : "";
+        return `
+          <article class="done-item">
+            <h4>${escapeHtml(badge)}</h4>
+            <div class="done-meta">${formatDateTime(lightUp.evidence.timestamp)}</div>
+            ${detail}
+            <div class="item-actions">
+              <button class="action-button" type="button" data-action="confirm" data-source="lightup" data-id="${escapeAttribute(lightUp.id)}">确认点亮</button>
+              <button class="action-button danger" type="button" data-action="delete" data-source="lightup" data-id="${escapeAttribute(lightUp.id)}">删除</button>
             </div>
           </article>
         `;
@@ -1915,8 +1996,7 @@
   }
 
   // lightups 只有这一份内存索引：凡是改动 state.forest.lightups 的路径都必须重建，
-  // 否则事件徽标会读到旧索引。PR-4 的 confirmLightUp()、deleteLightUp() 与
-  // handleRecordActions() 里删除事件时的级联清理加入时，要在这里同步补一次重建。
+  // 否则事件徽标会读到旧索引（确认、删除、级联清理三条路径都在重建）。
   function rebuildLightUpIndex() {
     lightUpByEventId = new Map();
     state.forest.lightups.forEach((lightUp) => {
@@ -2044,6 +2124,30 @@
     state.forest.selectedNodeId = null;
     state.forest.selectedNodeAt = null;
     return lightUp;
+  }
+
+  // L1 自证：一次点击即确认，不打分、不判题。已确认的重复调用不改状态（幂等）。
+  function confirmLightUp(id) {
+    const lightUp = state.forest.lightups.find((item) => item.id === id);
+    if (!lightUp || lightUp.status === "confirmed") {
+      return;
+    }
+    lightUp.status = "confirmed";
+    lightUp.confirmedAt = new Date().toISOString();
+    rebuildLightUpIndex();
+    saveState();
+    render();
+  }
+
+  function deleteLightUp(id) {
+    const remaining = state.forest.lightups.filter((item) => item.id !== id);
+    if (remaining.length === state.forest.lightups.length) {
+      return;
+    }
+    state.forest.lightups = remaining;
+    rebuildLightUpIndex();
+    saveState();
+    render();
   }
 
   function normalizeState(raw) {

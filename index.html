@@ -313,6 +313,7 @@
               <button class="record-tab" type="button" data-record-tab-target="quick-notes">随手记</button>
               <button class="record-tab" type="button" data-record-tab-target="habits">习惯查看</button>
               <button class="record-tab" type="button" data-record-tab-target="periods">日周月</button>
+              <button id="lightup-tab" class="record-tab" type="button" data-record-tab-target="lightups">点亮</button>
             </div>
 
             <section class="record-section" data-record-tab="events">
@@ -419,6 +420,30 @@
                     </div>
                   </div>
                   <div id="month-view-list" class="done-list"></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="record-section hidden" data-record-tab="lightups">
+              <div class="two-column">
+                <div class="panel panel-nested">
+                  <div class="panel-header">
+                    <div>
+                      <h2>节点点亮状态</h2>
+                      <p>● 是已确认点亮，○ 是还没点亮。这里只反映本地种子树上的进度。</p>
+                    </div>
+                  </div>
+                  <div id="forest-node-list" class="done-list"></div>
+                </div>
+
+                <div class="panel panel-nested">
+                  <div class="panel-header">
+                    <div>
+                      <h2>点亮记录</h2>
+                      <p>草稿排在最前。确认是自证：一次点击，不打分、不判题。</p>
+                    </div>
+                  </div>
+                  <div id="lightup-list" class="done-list"></div>
                 </div>
               </div>
             </section>
