@@ -63,6 +63,9 @@
   let platformReturnPage = "timer";
   let platformTab = "feed";
   let platformDetailNode = null;
+  // 服务器打卡只属于当前打开的那棵树；LOCAL_ONLY 下改由本地内存收集
+  let platformRecords = [];
+  const localPracticeRecords = [];
 
   function bootApp() {
     // 启动顺序：state → 种子树 → 索引 → 清理失效瞄准（只留提示）→ 首次 render()
@@ -552,7 +555,10 @@
     };
     state.events.unshift(newEvent);
     if (aimNode) {
-      createLightUpDraft(newEvent);
+      const draft = createLightUpDraft(newEvent);
+      if (draft) {
+        void publishPracticeDraft(draft);
+      }
     }
     elements.doneForm.reset();
     saveState();
@@ -667,7 +673,10 @@
 
     state.events.unshift(newEvent);
     if (aimNode) {
-      createLightUpDraft(newEvent);
+      const draft = createLightUpDraft(newEvent);
+      if (draft) {
+        void publishPracticeDraft(draft);
+      }
     }
     state.timer.elapsedMs = 0;
     state.timer.running = false;
@@ -838,29 +847,85 @@
       .join("");
   }
 
-  // 一张卡片一个节点：只放目标标题、第一份方法名、建议分钟和两个动作，教程正文不进卡片
+  // 知识平台是一棵树：prereq 边决定缩进，instance-of 的实例挂在原理节点下并标注「例子」
   function renderPlatformFeed() {
     if (nodeIndex.size === 0) {
       elements.platformFeed.innerHTML = createEmptyCard("还没有可浏览的内容。");
       return;
     }
-    elements.platformFeed.innerHTML = listNodes()
-      .map(({ treeId, node }) => {
-        const tutorials = getTutorialsForNode(treeId, node.id);
-        const methodText = tutorials.length ? tutorials[0].title : "还没有方法";
-        const minutes = Number(node.estMinutes) > 0 ? ` · 建议 ${node.estMinutes} 分钟` : "";
-        return `
-          <article class="platform-card">
-            <h3>${escapeHtml(nodeTitle(node))}</h3>
-            <div class="done-meta">${escapeHtml(methodText)}${minutes}</div>
-            <div class="item-actions">
-              <button class="action-button" type="button" data-action="platform-view" data-tree-id="${escapeAttribute(treeId)}" data-node-id="${escapeAttribute(node.id)}">看看</button>
-              <button class="action-button" type="button" data-action="platform-do" data-tree-id="${escapeAttribute(treeId)}" data-node-id="${escapeAttribute(node.id)}">去做</button>
-            </div>
-          </article>
-        `;
-      })
-      .join("");
+    const tree = getActiveTree();
+    if (!tree) {
+      elements.platformFeed.innerHTML = createEmptyCard("还没有可浏览的内容。");
+      return;
+    }
+    const layout = buildTreeLayout(tree);
+    elements.platformFeed.innerHTML = `<div class="node-tree">${layout.join("")}</div>`;
+  }
+
+  function buildTreeLayout(tree) {
+    const nodes = Array.isArray(tree.nodes) ? tree.nodes : [];
+    const edges = Array.isArray(tree.edges) ? tree.edges : [];
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const parentOf = new Map();
+    const instanceParents = new Map();
+    edges.forEach((edge) => {
+      if (!edge || !byId.has(edge.from) || !byId.has(edge.to)) {
+        return;
+      }
+      if (edge.type === "instance-of") {
+        if (!parentOf.has(edge.from)) {
+          parentOf.set(edge.from, edge.to);
+        }
+        instanceParents.set(edge.from, edge.to);
+      } else if (edge.type === "prereq" && !parentOf.has(edge.to)) {
+        parentOf.set(edge.to, edge.from);
+      }
+    });
+    const childrenOf = new Map();
+    nodes.forEach((node) => {
+      const parent = parentOf.get(node.id);
+      if (parent === undefined) {
+        return;
+      }
+      childrenOf.set(parent, (childrenOf.get(parent) || []).concat(node.id));
+    });
+    const treeId = tree.tree.id;
+    const rows = [];
+    nodes
+      .filter((node) => !parentOf.has(node.id))
+      .forEach((node) => walkNode(node.id, 0, false));
+
+    function walkNode(nodeId, depth, isInstance) {
+      const node = byId.get(nodeId);
+      if (!node) {
+        return;
+      }
+      rows.push(renderTreeNode(treeId, node, depth, isInstance));
+      (childrenOf.get(nodeId) || []).forEach((childId) => {
+        walkNode(childId, depth + 1, instanceParents.get(childId) === nodeId);
+      });
+    }
+
+    return rows;
+  }
+
+  function renderTreeNode(treeId, node, depth, isInstance) {
+    const count = recordsForNode(treeId, node.id).length;
+    const instanceTag = isInstance ? `<span class="node-instance-tag">例子</span>` : "";
+    return `
+      <button
+        class="node-row"
+        style="--depth: ${depth}"
+        type="button"
+        data-action="platform-view"
+        data-tree-id="${escapeAttribute(treeId)}"
+        data-node-id="${escapeAttribute(node.id)}"
+      >
+        <span class="node-title">${escapeHtml(nodeTitle(node))}</span>
+        ${instanceTag}
+        <span class="node-count">${count} 次打卡</span>
+      </button>
+    `;
   }
 
   function renderPlatformMine() {
@@ -911,49 +976,44 @@
       elements.platformDetailBody.innerHTML = createEmptyCard("找不到这个节点。");
       return;
     }
+    const records = recordsForNode(treeId, nodeId);
+    const recordsHtml = records.length
+      ? records.map(renderPracticeRecord).join("")
+      : `<div class="meta-note">还没有人在这里打过卡。</div>`;
     const tutorials = getTutorialsForNode(treeId, nodeId);
     const tutorialHtml = tutorials.length
       ? tutorials.map(renderTutorialCard).join("")
       : `<div class="meta-note">这个节点还没有方法。</div>`;
-    const own = state.forest.lightups.filter(
-      (lightUp) => lightUp.treeId === treeId && lightUp.nodeId === nodeId
-    );
-    const ownHtml = own.length
-      ? own
-          .map((lightUp) => {
-            const detail = lightUp.evidence && lightUp.evidence.detail
-              ? `<div class="habit-log">${escapeHtml(lightUp.evidence.detail)}</div>`
-              : "";
-            const button = lightUp.status === "confirmed"
-              ? ""
-              : `<button class="action-button" type="button" data-action="platform-confirm" data-id="${escapeAttribute(lightUp.id)}">发出</button>`;
-            return `
-              <article class="done-item">
-                <h4>${lightUp.status === "confirmed" ? "已发出" : "待发出"}</h4>
-                ${detail}
-                <div class="item-actions">${button}</div>
-              </article>
-            `;
-          })
-          .join("")
-      : `<div class="meta-note">这个节点上还没有你的说法。</div>`;
     elements.platformDetailBody.innerHTML = `
       <h2>${escapeHtml(nodeTitle(node))}</h2>
-      <div class="done-meta">建议 ${node.estMinutes} 分钟</div>
+      <div class="done-meta">${escapeHtml(node.goal || "暂无目标说明")}</div>
       <div class="stack-block">
-        <div class="meta-note">目标</div>
-        <div class="habit-log">${escapeHtml(node.goal || "暂无目标说明")}</div>
-        <div class="meta-note">自证提示</div>
-        <div class="habit-log">${escapeHtml(node.verifyHint || "暂无自证提示")}</div>
+        <div class="meta-note">打卡记录</div>
+        <div class="practice-list">${recordsHtml}</div>
       </div>
       <div class="stack-block">
-        <div class="meta-note">方法</div>
+        <label class="field">
+          <span>记一次</span>
+          <textarea id="practice-text" rows="3" maxlength="400" placeholder="写下这一次实际做了什么"></textarea>
+        </label>
+        <label class="field">
+          <span>图片</span>
+          <input id="practice-image" type="file" accept="image/*" multiple />
+        </label>
+        <div id="practice-status" class="report hidden"></div>
+        <button class="primary" type="button" data-action="platform-submit">记一次</button>
+      </div>
+      <div class="stack-block">
+        <div class="meta-note">方法（默认折叠）</div>
         ${tutorialHtml}
       </div>
-      <div class="stack-block">
-        <div class="meta-note">这个节点上自己的说法</div>
-        ${ownHtml}
-      </div>
+      <button
+        class="primary"
+        type="button"
+        data-action="platform-do"
+        data-tree-id="${escapeAttribute(treeId)}"
+        data-node-id="${escapeAttribute(nodeId)}"
+      >去做</button>
     `;
 
     Array.from(elements.platformDetailBody.querySelectorAll(".tutorial-toggle")).forEach((button) => {
@@ -961,6 +1021,168 @@
         toggleTutorial(button.dataset.tutorialId);
       });
     });
+  }
+
+  function renderPracticeRecord(record) {
+    const images = Array.isArray(record.images) ? record.images.filter((image) => image && image.id) : [];
+    const imagesHtml = images
+      .map((image) => `<img class="practice-image" src="/api/media/${escapeAttribute(image.id)}" alt="">`)
+      .join("");
+    const textHtml = record.text ? `<div class="habit-log">${escapeHtml(record.text)}</div>` : "";
+    return `
+      <article class="done-item">
+        <div class="done-meta">${escapeHtml(record.authorName || "我")} · ${formatDateTime(record.createdAt)}</div>
+        ${textHtml}
+        ${imagesHtml}
+      </article>
+    `;
+  }
+
+  // 服务器打卡 + 当前用户挂在这个节点上的 lightup（按 eventId 去重），新的在前
+  function recordsForNode(treeId, nodeId) {
+    const source = LOCAL_ONLY ? localPracticeRecords : platformRecords;
+    const server = source.filter((record) => record.treeId === treeId && record.nodeId === nodeId);
+    const serverEventIds = new Set(server.map((record) => record.eventId).filter(Boolean));
+    const own = state.forest.lightups
+      .filter((lightUp) => lightUp.treeId === treeId && lightUp.nodeId === nodeId)
+      .filter((lightUp) => !(lightUp.eventId && serverEventIds.has(lightUp.eventId)))
+      .map((lightUp) => ({
+        id: lightUp.id,
+        treeId,
+        nodeId,
+        authorName: "我",
+        createdAt: lightUp.evidence.timestamp || lightUp.createdAt,
+        text: lightUp.evidence.detail || "",
+        images: []
+      }));
+    return server.concat(own).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  }
+
+  function mergePlatformRecord(record) {
+    if (!record || !record.id) {
+      return;
+    }
+    const duplicate = platformRecords.some(
+      (item) => item.id === record.id || (record.eventId && item.eventId === record.eventId)
+    );
+    if (!duplicate) {
+      platformRecords.unshift(record);
+    }
+  }
+
+  async function loadPlatformRecords() {
+    const tree = getActiveTree();
+    if (!tree) {
+      return;
+    }
+    try {
+      const response = await window.fetch(`/api/records?treeId=${encodeURIComponent(tree.tree.id)}`, {
+        credentials: "same-origin"
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = await readJsonResponse(response);
+      platformRecords = data && Array.isArray(data.records) ? data.records : [];
+      renderPlatform();
+    } catch {
+      // 拉取失败时保持已有列表，不打断浏览
+    }
+  }
+
+  function setPracticeStatus(message) {
+    const status = document.getElementById("practice-status");
+    if (!status) {
+      return;
+    }
+    status.textContent = message || "";
+    status.classList.toggle("hidden", !message);
+  }
+
+  async function submitPracticeRecord() {
+    if (!platformDetailNode) {
+      return;
+    }
+    const { treeId, nodeId } = platformDetailNode;
+    const textInput = document.getElementById("practice-text");
+    const imageInput = document.getElementById("practice-image");
+    const text = textInput ? textInput.value.trim() : "";
+    if (LOCAL_ONLY) {
+      if (!text) {
+        setPracticeStatus("写点文字再记一次。");
+        return;
+      }
+      localPracticeRecords.unshift({
+        id: createId(),
+        treeId,
+        nodeId,
+        authorName: "我",
+        createdAt: new Date().toISOString(),
+        text,
+        images: [],
+        eventId: null
+      });
+      renderPlatform();
+      return;
+    }
+    let images = [];
+    try {
+      images = await collectPracticeImages(imageInput);
+    } catch {
+      setPracticeStatus("图片读取失败，请重试。");
+      return;
+    }
+    if (!text && !images.length) {
+      setPracticeStatus("写点文字或选一张图片。");
+      return;
+    }
+    const result = await postPracticeRecord({ treeId, nodeId, text, images });
+    if (!result.ok) {
+      setPracticeStatus(result.message || "记录失败，请稍后再试。");
+      return;
+    }
+    renderPlatform();
+  }
+
+  async function collectPracticeImages(input) {
+    if (!input || !input.files) {
+      return [];
+    }
+    const files = Array.from(input.files).slice(0, 4);
+    const images = [];
+    for (const file of files) {
+      const dataUrl = await readFileAsDataUrl(file);
+      images.push({ mediaType: file.type, dataUrl });
+    }
+    return images;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("图片读取失败"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function postPracticeRecord(payload) {
+    try {
+      const response = await window.fetch("/api/records", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await readJsonResponse(response);
+      if (!response.ok || !data || !data.ok || !data.record) {
+        return { ok: false, message: (data && data.message) || "记录失败，请稍后再试。" };
+      }
+      mergePlatformRecord(data.record);
+      return { ok: true, record: data.record };
+    } catch {
+      return { ok: false, message: "无法连接到本地服务，请确认服务端已启动。" };
+    }
   }
 
   function renderPlatform() {
@@ -1297,6 +1519,9 @@
     elements.nav.classList.add("hidden");
     elements.pages.forEach((section) => section.classList.add("hidden"));
     elements.platformShell.classList.remove("hidden");
+    if (!LOCAL_ONLY) {
+      void loadPlatformRecords();
+    }
   }
 
   function leavePlatform() {
@@ -1361,6 +1586,8 @@
       openPlatformDetail(button.dataset.treeId, button.dataset.nodeId);
     } else if (action === "platform-do") {
       aimAndGo(button.dataset.treeId, button.dataset.nodeId);
+    } else if (action === "platform-submit") {
+      void submitPracticeRecord();
     } else if (action === "platform-confirm") {
       confirmLightUp(button.dataset.id);
     } else if (action === "platform-delete") {
@@ -2013,16 +2240,6 @@
     return index;
   }
 
-  function listNodes() {
-    const items = [];
-    seedTrees.forEach((tree) => {
-      (Array.isArray(tree.nodes) ? tree.nodes : []).forEach((node) => {
-        items.push({ treeId: tree.tree.id, node });
-      });
-    });
-    return items;
-  }
-
   function nodeTitle(node) {
     return node && typeof node.title === "string" && node.title ? node.title : node && node.id ? node.id : "";
   }
@@ -2175,6 +2392,22 @@
     state.forest.selectedNodeId = null;
     state.forest.selectedNodeAt = null;
     return lightUp;
+  }
+
+  // 对着节点做完的那一次也是这个节点上的一条打卡：草稿一出现就写服务端，不等「发出」
+  async function publishPracticeDraft(draft) {
+    if (LOCAL_ONLY || !draft || !draft.treeId || !draft.nodeId) {
+      return;
+    }
+    const result = await postPracticeRecord({
+      treeId: draft.treeId,
+      nodeId: draft.nodeId,
+      text: draft.evidence.detail || "",
+      eventId: draft.eventId
+    });
+    if (result.ok && platformOpen) {
+      renderPlatform();
+    }
   }
 
   // L1 自证：一次点击即确认，不打分、不判题。已确认的重复调用不改状态（幂等）。

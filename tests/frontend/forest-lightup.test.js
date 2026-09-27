@@ -21,10 +21,11 @@ function seedState(overrides = {}) {
   };
 }
 
-// 瞄准是平台卡片上的「去做」：进入平台、点卡片、自动落到计时页
+// 瞄准是树上节点详情里的「去做」：进入平台、点节点、再点详情里的「去做」，自动落到计时页
 function aim(nodeId = NODE_ID) {
   document.getElementById("platform-entry").click();
-  document.querySelector(`#platform-feed [data-action='platform-do'][data-node-id='${nodeId}']`).click();
+  document.querySelector(`#platform-feed [data-action='platform-view'][data-node-id='${nodeId}']`).click();
+  document.querySelector("#platform-detail-body [data-action='platform-do']").click();
 }
 
 function finishTimer() {
@@ -348,11 +349,11 @@ describe("confirm and delete local light-ups", () => {
     expect(document.getElementById("done-list").textContent).toContain("已发出 · 一元一次方程");
 
     // 概览计数：分子 1，分母从已加载节点索引派生（不硬编码节点数）
-    const cardCount = document.querySelectorAll("#platform-feed .platform-card").length;
-    expect(document.getElementById("overview-lit-nodes").textContent).toBe(`1 / ${cardCount}`);
+    const rowCount = document.querySelectorAll("#platform-feed .node-row").length;
+    expect(document.getElementById("overview-lit-nodes").textContent).toBe(`1 / ${rowCount}`);
   });
 
-  it("shows the node's own claim in the detail and confirms it there", () => {
+  it("shows the node's own light-up as a practice record in the detail", () => {
     loadApp({ seedState: seedState() });
 
     aim();
@@ -363,13 +364,9 @@ describe("confirm and delete local light-ups", () => {
     document.querySelector(`#platform-feed [data-action='platform-view'][data-node-id='${NODE_ID}']`).click();
 
     const detail = document.getElementById("platform-detail");
-    expect(detail.textContent).toContain("这个节点上自己的说法");
-    expect(detail.textContent).toContain("待发出");
+    expect(detail.textContent).toContain("打卡记录");
     expect(detail.textContent).toContain("自己讲了一遍移项");
-
-    detail.querySelector("[data-action='platform-confirm']").click();
-
-    expect(getState().forest.lightups[0].status).toBe("confirmed");
+    expect(detail.textContent).toContain("我");
   });
 
   it("keeps confirmedAt when the same light-up is confirmed again", () => {

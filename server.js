@@ -17,6 +17,13 @@ const PUBLIC_FILES = new Map([
   ["/seed-trees/seed-trees.js", "seed-trees/seed-trees.js"]
 ]);
 
+const SEED_NODE_FILE = path.join(ROOT_DIR, "seed-trees", "k9-math.json");
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGES_PER_RECORD = 4;
+const RECORD_SCOPE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const MEDIA_ID_PATTERN = /^[0-9a-fA-F]+$/;
+
 function createApp(overrides = {}) {
   const config = buildConfig(overrides);
   const app = express();
@@ -279,6 +286,116 @@ function createApp(overrides = {}) {
     }
   });
 
+  app.get("/api/records", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    const treeId = typeof req.query.treeId === "string" ? req.query.treeId : "";
+    const nodeId = typeof req.query.nodeId === "string" ? req.query.nodeId : "";
+    try {
+      const records = readRecords(config)
+        .filter((record) => (!treeId || record.treeId === treeId) && (!nodeId || record.nodeId === nodeId))
+        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+      return res.json({ ok: true, records });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
+  app.post("/api/records", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    const validation = validateRecordPayload(req.body);
+    if (validation.ok === false) {
+      return res.status(400).json({
+        ok: false,
+        code: "VALIDATION_ERROR",
+        message: validation.message
+      });
+    }
+    const payload = validation.value;
+    try {
+      const records = readRecords(config);
+      if (payload.eventId) {
+        const existing = records.find((record) => record.eventId === payload.eventId);
+        if (existing) {
+          return res.json({ ok: true, record: existing });
+        }
+      }
+      const images = payload.images.map((image) => {
+        const id = nodeCrypto.randomBytes(16).toString("hex");
+        fs.mkdirSync(config.mediaDir, { recursive: true });
+        fs.writeFileSync(path.join(config.mediaDir, id), image.buffer);
+        return { id, mediaType: image.mediaType };
+      });
+      const record = {
+        id: createId(),
+        treeId: payload.treeId,
+        nodeId: payload.nodeId,
+        authorId: user.id,
+        authorName: user.name,
+        createdAt: new Date().toISOString(),
+        text: payload.text,
+        images,
+        eventId: payload.eventId
+      };
+      records.unshift(record);
+      writeJsonFile(config.recordsPath, records);
+      return res.status(201).json({ ok: true, record });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
+  app.delete("/api/records/:id", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    try {
+      const records = readRecords(config);
+      const index = records.findIndex((record) => record.id === req.params.id);
+      if (index < 0 || records[index].authorId !== user.id) {
+        return res.status(404).json({ ok: false, code: "NOT_FOUND", message: "没有找到这条记录。" });
+      }
+      records.splice(index, 1);
+      writeJsonFile(config.recordsPath, records);
+      return res.json({ ok: true });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
+  app.get("/api/media/:id", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    const id = req.params.id;
+    if (!MEDIA_ID_PATTERN.test(id)) {
+      return res.status(404).json({ ok: false, code: "NOT_FOUND", message: "没有找到这张图片。" });
+    }
+    try {
+      const filePath = path.join(config.mediaDir, id);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ ok: false, code: "NOT_FOUND", message: "没有找到这张图片。" });
+      }
+      const buffer = fs.readFileSync(filePath);
+      const mediaType = detectImageType(buffer);
+      if (!mediaType) {
+        return res.status(404).json({ ok: false, code: "NOT_FOUND", message: "没有找到这张图片。" });
+      }
+      res.setHeader("Content-Type", mediaType);
+      res.setHeader("Cache-Control", "private, max-age=300");
+      return res.send(buffer);
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
   app.use((req, res) => {
     res.status(404).json({
       ok: false,
@@ -295,6 +412,13 @@ function createApp(overrides = {}) {
         ok: false,
         code: "INVALID_JSON",
         message: "请求体不是合法 JSON。"
+      });
+    }
+    if (error && error.type === "entity.too.large") {
+      return res.status(413).json({
+        ok: false,
+        code: "PAYLOAD_TOO_LARGE",
+        message: "请求体太大。"
       });
     }
     return handleServerError(res, error);
@@ -314,7 +438,9 @@ function buildConfig(overrides) {
     usersPath: overrides.usersPath || path.join(dataDir, "users.json"),
     sessionsPath: overrides.sessionsPath || path.join(dataDir, "sessions.json"),
     statesDir: overrides.statesDir || path.join(dataDir, "states"),
-    bodyLimit: overrides.bodyLimit || "1mb",
+    recordsPath: overrides.recordsPath || path.join(dataDir, "records.json"),
+    mediaDir: overrides.mediaDir || path.join(dataDir, "media"),
+    bodyLimit: overrides.bodyLimit || "8mb",
     allowedOrigins: normalizeOrigins(overrides.allowedOrigins || process.env.ALLOWED_ORIGINS || ""),
     rateLimitEnabled:
       overrides.rateLimitEnabled !== undefined
@@ -392,6 +518,120 @@ function readUsers(config) {
 function readSessions(config) {
   const sessions = readJsonFile(config.sessionsPath, {});
   return sessions && typeof sessions === "object" && !Array.isArray(sessions) ? sessions : {};
+}
+
+function readRecords(config) {
+  const records = readJsonFile(config.recordsPath, []);
+  return Array.isArray(records) ? records : [];
+}
+
+let seedNodeIdsCache = null;
+
+// 节点标识以仓库种子树为准（k9-math.json 是唯一被接受的知识树）
+function getSeedNodeIds() {
+  if (seedNodeIdsCache) {
+    return seedNodeIdsCache;
+  }
+  let ids = new Set();
+  try {
+    const tree = JSON.parse(fs.readFileSync(SEED_NODE_FILE, "utf8"));
+    ids = new Set((Array.isArray(tree.nodes) ? tree.nodes : []).map((node) => node && node.id).filter(Boolean));
+  } catch {
+    ids = new Set();
+  }
+  seedNodeIdsCache = ids;
+  return seedNodeIdsCache;
+}
+
+/**
+ * @returns {{ ok: true, value: { treeId: string, nodeId: string, text: string, images: Array<{ mediaType: string, buffer: Buffer }>, eventId: string | null } } | { ok: false, message: string }}
+ */
+function validateRecordPayload(body) {
+  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const treeId = typeof payload.treeId === "string" ? payload.treeId : "";
+  const nodeId = typeof payload.nodeId === "string" ? payload.nodeId : "";
+  if (!RECORD_SCOPE_PATTERN.test(treeId) || !RECORD_SCOPE_PATTERN.test(nodeId)) {
+    return { ok: false, message: "树或节点标识不合法。" };
+  }
+  if (!getSeedNodeIds().has(nodeId)) {
+    return { ok: false, message: "节点不在已知的知识树里。" };
+  }
+  const text = typeof payload.text === "string" ? payload.text.trim() : "";
+  const images = normalizeImages(payload.images);
+  if (images.ok === false) {
+    return { ok: false, message: images.message };
+  }
+  if (!text && images.value.length === 0) {
+    return { ok: false, message: "写点文字或选一张图片。" };
+  }
+  const eventId = typeof payload.eventId === "string" && payload.eventId ? payload.eventId : null;
+  return { ok: true, value: { treeId, nodeId, text, images: images.value, eventId } };
+}
+
+/**
+ * @returns {{ ok: true, value: Array<{ mediaType: string, buffer: Buffer }> } | { ok: false, message: string }}
+ */
+function normalizeImages(raw) {
+  if (raw === undefined || raw === null) {
+    return { ok: true, value: [] };
+  }
+  if (!Array.isArray(raw)) {
+    return { ok: false, message: "图片必须是数组。" };
+  }
+  if (raw.length > MAX_IMAGES_PER_RECORD) {
+    return { ok: false, message: `一次最多 ${MAX_IMAGES_PER_RECORD} 张图片。` };
+  }
+  const value = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") {
+      return { ok: false, message: "图片格式不合法。" };
+    }
+    const mediaType = typeof item.mediaType === "string" ? item.mediaType : "";
+    const dataUrl = typeof item.dataUrl === "string" ? item.dataUrl : "";
+    if (!IMAGE_TYPES.has(mediaType)) {
+      return { ok: false, message: "只支持 JPEG、PNG、WebP、GIF 图片。" };
+    }
+    const parsed = parseDataUrl(dataUrl);
+    if (!parsed || parsed.mediaType !== mediaType) {
+      return { ok: false, message: "图片数据不合法。" };
+    }
+    if (parsed.buffer.length === 0 || parsed.buffer.length > MAX_IMAGE_BYTES) {
+      return { ok: false, message: "单张图片不能超过 2MB。" };
+    }
+    if (detectImageType(parsed.buffer) !== mediaType) {
+      return { ok: false, message: "图片内容与声明的类型不符。" };
+    }
+    value.push({ mediaType, buffer: parsed.buffer });
+  }
+  return { ok: true, value };
+}
+
+function parseDataUrl(dataUrl) {
+  const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!match) {
+    return null;
+  }
+  return { mediaType: match[1], buffer: Buffer.from(match[2], "base64") };
+}
+
+function detectImageType(buffer) {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+    return "image/png";
+  }
+  if (buffer.length >= 6 && buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) {
+    return "image/gif";
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  return null;
 }
 
 function stateFilePath(config, userId) {

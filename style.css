@@ -778,16 +778,71 @@ button {
   grid-template-columns: 1fr;
 }
 
-.platform-card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.66);
-  padding: 16px;
+.node-tree {
+  display: grid;
+  gap: 4px;
+  margin-left: 6px;
+  border-left: 2px solid var(--line-strong);
 }
 
-.platform-card h3 {
-  margin: 0 0 8px;
-  font-size: 17px;
+.node-row {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px 8px calc(16px + var(--depth, 0) * 22px);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.node-row::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--depth, 0) * 22px);
+  top: 50%;
+  width: 12px;
+  border-top: 1px solid var(--line-strong);
+}
+
+.node-row:hover {
+  background: var(--primary-soft);
+}
+
+.node-row:focus-visible {
+  background: var(--primary-soft);
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.node-title {
+  font-weight: 700;
+}
+
+.node-instance-tag {
+  color: var(--warm);
+  font-size: 12px;
+}
+
+.node-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.practice-list {
+  display: grid;
+  gap: 12px;
+}
+
+.practice-image {
+  display: block;
+  margin-top: 10px;
+  max-width: 100%;
+  border-radius: var(--radius-md);
 }
 
 .platform-detail {
