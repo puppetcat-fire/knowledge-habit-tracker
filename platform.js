@@ -1,5 +1,6 @@
 (function bootstrapPlatform() {
   const STORAGE_KEY = "knowledge-habit-tracker";
+  const CUSTOM_NODES_KEY = "knowledge-habit-custom-nodes";
   const CUSTOM_HABIT_NAME = "自由记录";
   const TREE_FORMAT = "forest-tree/v1";
   const STATE_VERSION = 3;
@@ -37,7 +38,11 @@
 
   let state = null;
   let platformBooted = false;
+  // seedTrees 是种子原样，mergedTrees 是叠加个人节点后的结果；布局与索引都读后者
   let seedTrees = [];
+  let mergedTrees = [];
+  let overlay = { nodes: [], edges: [] };
+  let currentUser = LOCAL_ONLY ? { id: "local", name: "我" } : null;
   let nodeIndex = new Map();
   let tutorialIndex = new Map();
   let platformRecords = [];
@@ -45,6 +50,9 @@
   // 折叠只存在内存里：展开教程不写 localStorage，也不写服务端
   const expandedTutorialIds = new Set();
   let detailNode = null;
+  let detailEditing = false;
+  let composerOpen = false;
+  let composerKind = "prereq";
 
   const elements = {
     platformRoot: document.getElementById("platform-root"),
@@ -56,10 +64,55 @@
 
   function bootPlatform() {
     seedTrees = loadSeedTrees();
-    nodeIndex = buildNodeIndex(seedTrees);
-    tutorialIndex = buildTutorialIndex(seedTrees);
+    if (LOCAL_ONLY) {
+      overlay = loadLocalOverlay();
+    }
+    rebuildIndexes();
     bindEvents();
     render();
+  }
+
+  // 个人节点并进种子树后再建索引；布局数学只认合并后的树
+  function rebuildIndexes() {
+    mergedTrees = mergeCustomNodes(seedTrees, overlay);
+    nodeIndex = buildNodeIndex(mergedTrees);
+    tutorialIndex = buildTutorialIndex(mergedTrees);
+  }
+
+  function mergeCustomNodes(trees, customOverlay) {
+    const nodes = customOverlay && Array.isArray(customOverlay.nodes) ? customOverlay.nodes : [];
+    const edges = customOverlay && Array.isArray(customOverlay.edges) ? customOverlay.edges : [];
+    return trees.map((tree) => {
+      const treeId = tree.tree ? tree.tree.id : null;
+      const addedNodes = nodes.filter((node) => node && node.treeId === treeId);
+      const addedIds = new Set(addedNodes.map((node) => node.id));
+      const addedEdges = edges.filter((edge) => edge && (addedIds.has(edge.from) || addedIds.has(edge.to)));
+      return {
+        ...tree,
+        nodes: (Array.isArray(tree.nodes) ? tree.nodes : []).concat(addedNodes),
+        edges: (Array.isArray(tree.edges) ? tree.edges : []).concat(addedEdges)
+      };
+    });
+  }
+
+  function loadLocalOverlay() {
+    try {
+      const raw = window.localStorage.getItem(CUSTOM_NODES_KEY);
+      if (!raw) {
+        return { nodes: [], edges: [] };
+      }
+      const parsed = JSON.parse(raw);
+      return {
+        nodes: parsed && Array.isArray(parsed.nodes) ? parsed.nodes : [],
+        edges: parsed && Array.isArray(parsed.edges) ? parsed.edges : []
+      };
+    } catch {
+      return { nodes: [], edges: [] };
+    }
+  }
+
+  function saveLocalOverlay() {
+    window.localStorage.setItem(CUSTOM_NODES_KEY, JSON.stringify(overlay));
   }
 
   function bindEvents() {
@@ -84,6 +137,22 @@
       confirmLightUp(button.dataset.id);
     } else if (action === "platform-delete") {
       deleteLightUp(button.dataset.id);
+    } else if (action === "platform-create-open") {
+      openNodeComposer();
+    } else if (action === "platform-create-kind") {
+      setComposerKind(button.dataset.kind);
+    } else if (action === "platform-create-submit") {
+      void submitNodeComposer();
+    } else if (action === "platform-edit-open") {
+      detailEditing = true;
+      renderPlatformDetail();
+    } else if (action === "platform-edit-save") {
+      void saveNodeEdit();
+    } else if (action === "platform-edit-cancel") {
+      detailEditing = false;
+      renderPlatformDetail();
+    } else if (action === "platform-node-delete") {
+      void deleteNode();
     }
   }
 
@@ -310,6 +379,10 @@
   }
 
   function renderPlatformDetail() {
+    if (composerOpen) {
+      renderNodeComposer();
+      return;
+    }
     if (!detailNode) {
       elements.platformDetailBody.innerHTML = "";
       return;
@@ -328,9 +401,21 @@
     const tutorialHtml = tutorials.length
       ? tutorials.map(renderTutorialCard).join("")
       : `<div class="meta-note">这个节点还没有方法。</div>`;
+    const ownershipHtml = `<p id="node-ownership" class="detail-meta">${escapeHtml(ownershipLabel(node))}</p>`;
+    const editButtonHtml =
+      canEditNode(node)
+        ? `<button id="node-edit" class="ghost-button" type="button" data-action="platform-edit-open">编辑</button>`
+        : "";
+    const headerHtml = detailEditing
+      ? `${ownershipHtml}${renderNodeEditForm(node)}`
+      : `
+        <h2>${escapeHtml(nodeTitle(node))}</h2>
+        ${ownershipHtml}
+        ${editButtonHtml}
+        <div class="detail-meta">${escapeHtml(node.goal || "暂无目标说明")}</div>
+      `;
     elements.platformDetailBody.innerHTML = `
-      <h2>${escapeHtml(nodeTitle(node))}</h2>
-      <div class="detail-meta">${escapeHtml(node.goal || "暂无目标说明")}</div>
+      ${headerHtml}
       <div class="detail-block">
         <div class="detail-label">打卡记录</div>
         <div class="record-list">${recordsHtml}</div>
@@ -365,6 +450,331 @@
         toggleTutorial(button.dataset.tutorialId);
       });
     });
+  }
+
+  function renderNodeEditForm(node) {
+    return `
+      <div class="node-edit-form">
+        <label class="field">
+          <span>节点名字</span>
+          <input id="node-edit-title" type="text" maxlength="40" value="${escapeAttribute(nodeTitle(node))}" />
+        </label>
+        <label class="field">
+          <span>这一节点要达成什么</span>
+          <textarea id="node-edit-goal" rows="3" maxlength="200">${escapeHtml(node.goal || "")}</textarea>
+        </label>
+        <label class="field">
+          <span>建议时长（分钟）</span>
+          <input id="node-edit-minutes" type="number" value="${escapeAttribute(node.estMinutes ?? 10)}" />
+        </label>
+        <div id="node-edit-error" class="report hidden"></div>
+        <div class="account-modes">
+          <button class="primary" type="button" data-action="platform-edit-save">保存</button>
+          <button class="ghost-button" type="button" data-action="platform-edit-cancel">取消</button>
+          <button class="ghost-button danger" type="button" data-action="platform-node-delete">删除</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderNodeComposer() {
+    const tree = getActiveTree();
+    const nodes = tree && Array.isArray(tree.nodes) ? tree.nodes : [];
+    const options = nodes
+      .map((node) => `<option value="${escapeAttribute(node.id)}">${escapeHtml(nodeTitle(node))}</option>`)
+      .join("");
+    const prereqActive = composerKind !== "instance-of";
+    elements.platformDetailBody.innerHTML = `
+      <h2>新建节点</h2>
+      <label class="field">
+        <span>节点名字</span>
+        <input id="node-create-title" type="text" maxlength="40" placeholder="节点名字" />
+      </label>
+      <label class="field">
+        <span>这一节点要达成什么</span>
+        <textarea id="node-create-goal" rows="3" maxlength="200" placeholder="这一节点要达成什么"></textarea>
+      </label>
+      <label class="field">
+        <span>建议时长（分钟）</span>
+        <input id="node-create-minutes" type="number" value="10" />
+      </label>
+      <label class="field">
+        <span>挂在哪里</span>
+        <select id="node-create-anchor">${options}</select>
+      </label>
+      <div class="account-modes">
+        <button class="account-mode-button${prereqActive ? " active" : ""}" type="button" data-action="platform-create-kind" data-kind="prereq">作为它的后置</button>
+        <button class="account-mode-button${prereqActive ? "" : " active"}" type="button" data-action="platform-create-kind" data-kind="instance-of">作为它的实例</button>
+      </div>
+      <div id="node-create-error" class="report hidden"></div>
+      <button class="primary" type="button" data-action="platform-create-submit">放上树</button>
+    `;
+  }
+
+  function openNodeComposer() {
+    composerOpen = true;
+    composerKind = "prereq";
+    detailEditing = false;
+    detailNode = null;
+    renderPlatformDetail();
+    elements.platformDetail.classList.remove("hidden");
+  }
+
+  function setComposerKind(kind) {
+    composerKind = kind === "instance-of" ? "instance-of" : "prereq";
+    Array.from(elements.platformDetailBody.querySelectorAll("[data-action='platform-create-kind']")).forEach((button) => {
+      button.classList.toggle("active", button.dataset.kind === composerKind);
+    });
+  }
+
+  function setComposerError(message) {
+    const box = document.getElementById("node-create-error");
+    if (!box) {
+      return;
+    }
+    box.textContent = message || "";
+    box.classList.toggle("hidden", !message);
+  }
+
+  function setEditError(message) {
+    const box = document.getElementById("node-edit-error");
+    if (!box) {
+      return;
+    }
+    box.textContent = message || "";
+    box.classList.toggle("hidden", !message);
+  }
+
+  async function submitNodeComposer() {
+    const titleInput = document.getElementById("node-create-title");
+    const goalInput = document.getElementById("node-create-goal");
+    const minutesInput = document.getElementById("node-create-minutes");
+    const anchorSelect = document.getElementById("node-create-anchor");
+    const title = titleInput ? titleInput.value.trim() : "";
+    const goal = goalInput ? goalInput.value.trim() : "";
+    const minutes = minutesInput ? Number(minutesInput.value) : NaN;
+    const anchorId = anchorSelect ? anchorSelect.value : "";
+    if (!title) {
+      setComposerError("写上节点名字。");
+      return;
+    }
+    if (!goal) {
+      setComposerError("写上这个节点要达成什么。");
+      return;
+    }
+    if (!Number.isFinite(minutes) || minutes < 5 || minutes > 15) {
+      setComposerError("建议时长是 5 到 15 分钟。");
+      return;
+    }
+    if (!anchorId) {
+      setComposerError("先选一个已有节点，说明它挂在哪里。");
+      return;
+    }
+    const tree = getActiveTree();
+    const treeId = tree ? tree.tree.id : null;
+    const payload = { title, goal, estMinutes: minutes, anchorId, kind: composerKind, treeId };
+    if (LOCAL_ONLY) {
+      // 本地模式没有网络往返：同步落盘并渲染，点击即可见
+      finishNodeCreate(persistLocalNodeCreate(payload), treeId);
+      return;
+    }
+    finishNodeCreate(await persistRemoteNodeCreate(payload), treeId);
+  }
+
+  function finishNodeCreate(result, treeId) {
+    if (!result.ok) {
+      setComposerError(result.message || "创建失败，请稍后再试。");
+      return;
+    }
+    composerOpen = false;
+    composerKind = "prereq";
+    detailNode = { treeId, nodeId: result.node.id };
+    render();
+    elements.platformDetail.classList.remove("hidden");
+  }
+
+  function persistLocalNodeCreate({ title, goal, estMinutes, anchorId, kind, treeId }) {
+    const now = new Date().toISOString();
+    const node = {
+      id: createId(),
+      treeId,
+      title,
+      goal,
+      estMinutes,
+      ownership: "personal",
+      ownerId: currentUser.id,
+      ownerName: currentUser.name,
+      createdAt: now,
+      updatedAt: now
+    };
+    const edge =
+      kind === "instance-of"
+        ? { from: node.id, to: anchorId, type: "instance-of" }
+        : { from: anchorId, to: node.id, type: "prereq" };
+    overlay = { nodes: overlay.nodes.concat(node), edges: overlay.edges.concat(edge) };
+    saveLocalOverlay();
+    rebuildIndexes();
+    return { ok: true, node };
+  }
+
+  async function persistRemoteNodeCreate({ title, goal, estMinutes, anchorId, kind }) {
+    try {
+      const response = await window.fetch("/api/nodes", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, goal, estMinutes, link: { type: kind, anchorId } })
+      });
+      const data = await readJsonResponse(response);
+      if (!response.ok || !data || !data.node) {
+        return { ok: false, message: (data && data.message) || "创建失败，请稍后再试。" };
+      }
+      await loadOverlay();
+      rebuildIndexes();
+      return { ok: true, node: data.node };
+    } catch {
+      return { ok: false, message: "无法连接到本地服务，请确认服务端已启动。" };
+    }
+  }
+
+  async function saveNodeEdit() {
+    if (!detailNode) {
+      return;
+    }
+    const { treeId, nodeId } = detailNode;
+    const node = getNodeById(treeId, nodeId);
+    if (!node) {
+      return;
+    }
+    const titleInput = document.getElementById("node-edit-title");
+    const goalInput = document.getElementById("node-edit-goal");
+    const minutesInput = document.getElementById("node-edit-minutes");
+    const title = titleInput ? titleInput.value.trim() : nodeTitle(node);
+    const goal = goalInput ? goalInput.value.trim() : node.goal || "";
+    const estMinutes = minutesInput
+      ? clampNumber(minutesInput.value, 5, 15, node.estMinutes || 10)
+      : node.estMinutes;
+    const values = { title, goal, estMinutes };
+    if (LOCAL_ONLY) {
+      finishNodeUpdate(persistLocalNodeUpdate(node.id, values));
+      return;
+    }
+    finishNodeUpdate(await persistRemoteNodeUpdate(node.id, values));
+  }
+
+  function finishNodeUpdate(result) {
+    if (!result.ok) {
+      setEditError(result.message || "保存失败，请稍后再试。");
+      return;
+    }
+    detailEditing = false;
+    render();
+  }
+
+  function persistLocalNodeUpdate(id, { title, goal, estMinutes }) {
+    const now = new Date().toISOString();
+    overlay = {
+      nodes: overlay.nodes.map((item) =>
+        item.id === id ? { ...item, title, goal, estMinutes, updatedAt: now } : item
+      ),
+      edges: overlay.edges
+    };
+    saveLocalOverlay();
+    rebuildIndexes();
+    return { ok: true };
+  }
+
+  async function persistRemoteNodeUpdate(id, { title, goal, estMinutes }) {
+    try {
+      const response = await window.fetch(`/api/nodes/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, goal, estMinutes })
+      });
+      const data = await readJsonResponse(response);
+      if (!response.ok || !data || !data.node) {
+        return { ok: false, message: (data && data.message) || "保存失败，请稍后再试。" };
+      }
+      await loadOverlay();
+      rebuildIndexes();
+      return { ok: true };
+    } catch {
+      return { ok: false, message: "无法连接到本地服务，请确认服务端已启动。" };
+    }
+  }
+
+  async function deleteNode() {
+    if (!detailNode) {
+      return;
+    }
+    const { nodeId } = detailNode;
+    if (!window.confirm("删除这个节点？打卡记录会留下来。")) {
+      return;
+    }
+    if (LOCAL_ONLY) {
+      overlay = {
+        nodes: overlay.nodes.filter((node) => node.id !== nodeId),
+        edges: overlay.edges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId)
+      };
+      saveLocalOverlay();
+      closePlatformDetail();
+      rebuildIndexes();
+      render();
+      return;
+    }
+    try {
+      const response = await window.fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
+        method: "DELETE",
+        credentials: "same-origin"
+      });
+      const data = await readJsonResponse(response);
+      if (!response.ok || !data || data.ok !== true) {
+        setEditError((data && data.message) || "删除失败，请稍后再试。");
+        return;
+      }
+      await loadOverlay();
+      closePlatformDetail();
+      rebuildIndexes();
+      render();
+    } catch {
+      setEditError("无法连接到本地服务，请确认服务端已启动。");
+    }
+  }
+
+  async function loadOverlay() {
+    try {
+      const response = await window.fetch("/api/nodes", { credentials: "same-origin" });
+      if (!response.ok) {
+        return;
+      }
+      const data = await readJsonResponse(response);
+      if (data && Array.isArray(data.nodes)) {
+        overlay = { nodes: data.nodes, edges: Array.isArray(data.edges) ? data.edges : [] };
+      }
+    } catch {
+      // 拉取失败时保持已有 overlay，不打断浏览
+    }
+  }
+
+  function ownershipLabel(node) {
+    const ownership = node && node.ownership ? node.ownership : "group";
+    if (ownership !== "personal") {
+      return "共有";
+    }
+    if (currentUser && node.ownerId === currentUser.id) {
+      return "我的";
+    }
+    return `${(node && node.ownerName) || "别人"} 的`;
+  }
+
+  function canEditNode(node) {
+    return Boolean(
+      node &&
+        (node.ownership || "group") === "personal" &&
+        currentUser &&
+        node.ownerId === currentUser.id
+    );
   }
 
   function renderPracticeRecord(record) {
@@ -455,6 +865,8 @@
     if (!treeId || !nodeId) {
       return;
     }
+    composerOpen = false;
+    detailEditing = false;
     detailNode = { treeId, nodeId };
     renderPlatformDetail();
     elements.platformDetail.classList.remove("hidden");
@@ -462,6 +874,8 @@
 
   function closePlatformDetail() {
     detailNode = null;
+    detailEditing = false;
+    composerOpen = false;
     expandedTutorialIds.clear();
     elements.platformDetailBody.innerHTML = "";
     elements.platformDetail.classList.add("hidden");
@@ -768,7 +1182,7 @@
   }
 
   function getActiveTree() {
-    return seedTrees.find((tree) => tree.tree.id === state.forest.activeTreeId) || seedTrees[0] || null;
+    return mergedTrees.find((tree) => tree.tree.id === state.forest.activeTreeId) || mergedTrees[0] || null;
   }
 
   function getNodeById(treeId, nodeId) {
@@ -983,10 +1397,14 @@
     state = nextState || cloneDefaultState();
     showApp();
     if (!platformBooted) {
+      await loadOverlay();
       bootPlatform();
       platformBooted = true;
       void loadPlatformRecords();
     } else {
+      // 已启动：只重新并树、重建索引再渲染，不重复绑定事件
+      await loadOverlay();
+      rebuildIndexes();
       render();
     }
     // 启动加载本身不写服务端，等用户第一次改动再同步
@@ -1020,6 +1438,7 @@
     if (!data || !data.user) {
       return;
     }
+    currentUser = data.user;
     await enterApp();
   }
 
@@ -1082,6 +1501,7 @@
           return;
         }
         passwordInput.value = "";
+        currentUser = data.user;
         await enterApp();
       } catch {
         showError("网络连接失败，请稍后再试。");

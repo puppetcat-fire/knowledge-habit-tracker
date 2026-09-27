@@ -2,15 +2,20 @@ const fs = require("fs");
 const path = require("path");
 
 const STORAGE_KEY = "knowledge-habit-tracker";
+const CUSTOM_NODES_KEY = "knowledge-habit-custom-nodes";
 
 // seedState：要在 app.js 求值之前写入 localStorage 的状态（v1/v2/v3 都可以）
+// customNodes：个人节点叠加层 { nodes, edges }；为 null 时不写入该键
 // withSeedBundle：false 时删除全局种子树，用于测试"树缺失"的退化路径
-function loadApp({ seedState = null, withSeedBundle = true } = {}) {
+function loadApp({ seedState = null, withSeedBundle = true, customNodes = null } = {}) {
   const html = fs.readFileSync(path.join(__dirname, "../../index.html"), "utf-8");
   document.documentElement.innerHTML = html;
   localStorage.clear();
   if (seedState) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seedState));
+  }
+  if (customNodes !== null) {
+    localStorage.setItem(CUSTOM_NODES_KEY, JSON.stringify(customNodes));
   }
 
   const uuid = () => `id-${Math.random().toString(16).slice(2, 10)}`;

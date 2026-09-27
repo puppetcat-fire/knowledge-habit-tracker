@@ -1,17 +1,15 @@
-/* 知识共建共享平台：一块深色平面，刻意与习惯页的米色纸页区分开。 */
+/* 知识共建共享平台：暖黑底、米色卡片，刻意与习惯页的纸页区分开。 */
 :root {
-  --plane: #101418;
-  --plane-grid: rgba(255, 255, 255, 0.035);
-  --bar: #151c22;
-  --line-dark: #242e37;
-  --ink: #e6edf3;
-  --ink-muted: #8a99a6;
-  --card: #f4efe6;
-  --card-ink: #241f17;
-  --card-edge: #d9cfbf;
-  --prereq: #d7a15a;
-  --instance: #7eb8c9;
-  --aside: #1a2128;
+  --plane: #14120f;
+  --bar: #1c1916;
+  --line-dark: #2c2823;
+  --ink: #f3efe6;
+  --ink-muted: #a39888;
+  --card: #f7f3ea;
+  --card-ink: #1c1916;
+  --prereq: #b08968;
+  --instance: #8aa0a2;
+  --aside: #1c1916;
 }
 
 * {
@@ -27,10 +25,6 @@ body {
 body {
   min-height: 100vh;
   background-color: var(--plane);
-  background-image:
-    linear-gradient(var(--plane-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--plane-grid) 1px, transparent 1px);
-  background-size: 32px 32px;
   color: var(--ink);
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   line-height: 1.6;
@@ -40,7 +34,7 @@ body {
   display: none !important;
 }
 
-/* 账号门：同一块深色底，不做习惯页的纸面卡片 */
+/* 账号门：同一块暖黑底，不做习惯页的纸面卡片 */
 .account-gate {
   min-height: 100vh;
   display: grid;
@@ -52,7 +46,7 @@ body {
   width: min(420px, 100%);
   background: var(--aside);
   border: 1px solid var(--line-dark);
-  border-radius: 4px;
+  border-radius: 16px;
   padding: 28px;
 }
 
@@ -88,28 +82,31 @@ body {
 
 input[type="text"],
 input[type="password"],
+input[type="number"],
+select,
 textarea,
 input[type="file"] {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--line-dark);
-  border-radius: 4px;
-  background: #101820;
+  border-radius: 10px;
+  background: #1b1815;
   color: var(--ink);
   font: inherit;
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   outline: 1px solid var(--prereq);
   border-color: var(--prereq);
 }
 
 .primary {
-  border: 1px solid var(--prereq);
-  border-radius: 4px;
-  background: var(--prereq);
-  color: #201607;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #f3eadc;
+  color: #1c1916;
   padding: 10px 16px;
   font: inherit;
   font-weight: 700;
@@ -117,7 +114,7 @@ textarea:focus {
 }
 
 .primary:hover {
-  background: #e2b06c;
+  background: #e8dcc7;
 }
 
 .account-modes {
@@ -130,7 +127,7 @@ textarea:focus {
 .link-button,
 .ghost-button {
   border: 1px solid var(--line-dark);
-  border-radius: 4px;
+  border-radius: 10px;
   background: transparent;
   color: var(--ink-muted);
   padding: 8px 14px;
@@ -158,12 +155,12 @@ textarea:focus {
   margin-top: 14px;
   padding: 10px 12px;
   border: 1px solid #8a4444;
-  border-radius: 4px;
+  border-radius: 10px;
   color: #e0a0a0;
   background: rgba(138, 68, 68, 0.12);
 }
 
-/* 顶栏：只有标题、回习惯页的链接、退出 */
+/* 顶栏：只有标题、新建节点、回习惯页的链接、退出 */
 .platform-root {
   min-height: 100vh;
   display: flex;
@@ -185,7 +182,9 @@ textarea:focus {
 
 .platform-title {
   margin: 0;
+  font-family: "Palatino Linotype", "Songti SC", "STSong", serif;
   font-size: 18px;
+  font-weight: 500;
   letter-spacing: 0.04em;
 }
 
@@ -196,13 +195,13 @@ textarea:focus {
 }
 
 .platform-link {
-  color: var(--instance);
+  color: var(--ink-muted);
   text-decoration: none;
   border-bottom: 1px solid transparent;
 }
 
 .platform-link:hover {
-  border-bottom-color: var(--instance);
+  border-bottom-color: var(--ink-muted);
 }
 
 .platform-stage {
@@ -219,7 +218,7 @@ textarea:focus {
   padding: 24px;
 }
 
-/* 平面与节点：浅色卡片绝对定位铺在深色平面上 */
+/* 平面与节点：米色卡片绝对定位铺在暖黑底上 */
 .tree-plane {
   position: relative;
 }
@@ -259,7 +258,7 @@ textarea:focus {
 
 .tree-edge {
   fill: none;
-  stroke-width: 2;
+  stroke-width: 1.25;
 }
 
 .tree-edge-prereq {
@@ -280,17 +279,17 @@ textarea:focus {
   width: 168px;
   height: 72px;
   padding: 10px 14px;
-  border: 1px solid var(--card-edge);
-  border-radius: 4px;
+  border: 0;
+  border-radius: 14px;
   background: var(--card);
   color: var(--card-ink);
   text-align: left;
   cursor: pointer;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
 .tree-node:hover {
   background: #fffaf0;
-  border-color: var(--prereq);
 }
 
 .tree-node:focus-visible {
@@ -349,9 +348,9 @@ textarea:focus {
 }
 
 .record-item {
-  border: 1px solid var(--line-dark);
-  border-radius: 4px;
-  background: #131b22;
+  border: 0;
+  border-radius: 12px;
+  background: #26231e;
   padding: 12px 14px;
 }
 
@@ -375,7 +374,7 @@ textarea:focus {
   display: block;
   margin-top: 10px;
   max-width: 100%;
-  border-radius: 4px;
+  border-radius: 10px;
 }
 
 .meta-note {
@@ -396,4 +395,27 @@ textarea:focus {
 
 .tutorial-toggle {
   margin-left: auto;
+}
+
+/* 新建节点表单直接在阅读栏里排布，字段之间留出间距 */
+.detail-body > .field {
+  margin-bottom: 12px;
+}
+
+.node-edit-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 800px) {
+  .platform-stage {
+    flex-direction: column;
+  }
+
+  .platform-detail {
+    flex: 1 1 auto;
+    width: 100%;
+    border-left: 0;
+  }
 }

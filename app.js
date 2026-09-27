@@ -1,6 +1,7 @@
 (function bootstrapApp() {
   const STORAGE_KEY = "knowledge-habit-tracker";
   const BUG_CACHE_KEY = "knowledge-habit-tracker-bugs";
+  const CUSTOM_NODES_KEY = "knowledge-habit-custom-nodes";
   const CUSTOM_HABIT_NAME = "自由记录";
   const MAX_BUG_CACHE = 20;
   const TREE_FORMAT = "forest-tree/v1";
@@ -53,13 +54,18 @@
   let modalContext = null;
   let seedTrees = [];
   let nodeIndex = new Map();
+  // 个人节点叠加层（本地模式读 localStorage，在线模式读 GET /api/nodes）
+  let customNodeOverlay = { nodes: [], edges: [] };
   let lightUpByEventId = new Map();
   // 一次性提示（'expired' | 'dangling' | null）：模块级，不进 state、不参与导出
   let lastAimNotice = null;
 
   function bootApp() {
-    // 启动顺序：state → 种子树 → 索引 → 清理失效瞄准（只留提示）→ 首次 render()
-    seedTrees = loadSeedTrees();
+    // 启动顺序：state → 种子树（叠加个人节点）→ 索引 → 清理失效瞄准（只留提示）→ 首次 render()
+    if (LOCAL_ONLY) {
+      customNodeOverlay = loadLocalNodeOverlay();
+    }
+    seedTrees = mergeCustomNodes(loadSeedTrees(), customNodeOverlay);
     nodeIndex = buildNodeIndex(seedTrees);
     rebuildLightUpIndex();
     pruneStaleAim();
@@ -1701,6 +1707,53 @@
     return index;
   }
 
+  // 个人节点独立存储：形状坏了就当空叠加层，绝不让种子树启动失败
+  function normalizeNodeOverlay(raw) {
+    const source = raw && typeof raw === "object" ? raw : {};
+    return {
+      nodes: Array.isArray(source.nodes) ? source.nodes.filter((node) => node && typeof node === "object") : [],
+      edges: Array.isArray(source.edges) ? source.edges.filter((edge) => edge && typeof edge === "object") : []
+    };
+  }
+
+  function loadLocalNodeOverlay() {
+    try {
+      const raw = window.localStorage.getItem(CUSTOM_NODES_KEY);
+      return raw ? normalizeNodeOverlay(JSON.parse(raw)) : { nodes: [], edges: [] };
+    } catch {
+      return { nodes: [], edges: [] };
+    }
+  }
+
+  async function loadRemoteNodeOverlay() {
+    try {
+      const response = await window.fetch("/api/nodes", { credentials: "same-origin" });
+      if (!response.ok) {
+        return { nodes: [], edges: [] };
+      }
+      return normalizeNodeOverlay(await readJsonResponse(response));
+    } catch {
+      return { nodes: [], edges: [] };
+    }
+  }
+
+  // 返回新树对象，不动种子数组：nodeIndex 合并后，个人节点才不算悬空
+  function mergeCustomNodes(trees, overlay) {
+    const nodes = overlay && Array.isArray(overlay.nodes) ? overlay.nodes : [];
+    const edges = overlay && Array.isArray(overlay.edges) ? overlay.edges : [];
+    return trees.map((tree) => {
+      const treeId = tree.tree.id;
+      const extraNodes = nodes.filter((node) => node.treeId === treeId);
+      const extraIds = new Set(extraNodes.map((node) => node.id));
+      const extraEdges = edges.filter((edge) => extraIds.has(edge.from) || extraIds.has(edge.to));
+      return {
+        ...tree,
+        nodes: (Array.isArray(tree.nodes) ? tree.nodes : []).concat(extraNodes),
+        edges: (Array.isArray(tree.edges) ? tree.edges : []).concat(extraEdges)
+      };
+    });
+  }
+
   function nodeTitle(node) {
     return node && typeof node.title === "string" && node.title ? node.title : node && node.id ? node.id : "";
   }
@@ -2200,11 +2253,14 @@
       nextState = null;
     }
     state = nextState || cloneDefaultState();
+    customNodeOverlay = await loadRemoteNodeOverlay();
     showApp();
     if (!appBooted) {
       bootApp();
       appBooted = true;
     } else {
+      seedTrees = mergeCustomNodes(loadSeedTrees(), customNodeOverlay);
+      nodeIndex = buildNodeIndex(seedTrees);
       rebuildLightUpIndex();
       pruneStaleAim();
       render();

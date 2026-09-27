@@ -31,6 +31,7 @@ const SERVICE_NAMES = {
 };
 
 const SEED_NODE_FILE = path.join(ROOT_DIR, "seed-trees", "k9-math.json");
+const CUSTOM_NODE_TREE_ID = "k9-math";
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGES_PER_RECORD = 4;
@@ -79,11 +80,8 @@ function createApp(overrides = {}) {
   const publicFiles = config.surface === "platform" ? PLATFORM_PUBLIC_FILES : HABIT_PUBLIC_FILES;
   publicFiles.forEach((fileName, route) => {
     app.get(route, (req, res) => {
-      if (fileName.endsWith(".html")) {
-        res.setHeader("Cache-Control", "no-store");
-      } else {
-        res.setHeader("Cache-Control", "public, max-age=300");
-      }
+      // 本地试用期间每次刷新都要看到最新资源，因此所有静态文件都不缓存
+      res.setHeader("Cache-Control", "no-store");
       res.sendFile(path.join(ROOT_DIR, fileName));
     });
   });
@@ -322,7 +320,7 @@ function createApp(overrides = {}) {
     if (!user) {
       return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
     }
-    const validation = validateRecordPayload(req.body);
+    const validation = validateRecordPayload(req.body, config);
     if (validation.ok === false) {
       return res.status(400).json({
         ok: false,
@@ -410,6 +408,108 @@ function createApp(overrides = {}) {
     }
   });
 
+  app.get("/api/nodes", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    try {
+      const { nodes, edges } = readCustomNodes(config);
+      return res.json({ ok: true, nodes, edges });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
+  app.post("/api/nodes", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    const validation = validateNodePayload(req.body, config);
+    if (validation.ok === false) {
+      return res.status(400).json({ ok: false, code: "VALIDATION_ERROR", message: validation.message });
+    }
+    const value = validation.value;
+    const now = new Date().toISOString();
+    const id = createNodeId();
+    const node = {
+      id,
+      treeId: CUSTOM_NODE_TREE_ID,
+      title: value.title,
+      goal: value.goal,
+      estMinutes: value.estMinutes,
+      ownership: "personal",
+      ownerId: user.id,
+      ownerName: user.name,
+      createdAt: now,
+      updatedAt: now
+    };
+    const edge =
+      value.linkType === "prereq"
+        ? { from: value.anchorId, to: id, type: "prereq" }
+        : { from: id, to: value.anchorId, type: "instance-of" };
+    try {
+      const data = readCustomNodes(config);
+      data.nodes.push(node);
+      data.edges.push(edge);
+      writeCustomNodes(config, data);
+      return res.status(201).json({ ok: true, node, edge });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
+  app.patch("/api/nodes/:id", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    try {
+      const data = readCustomNodes(config);
+      const node = data.nodes.find((candidate) => candidate && candidate.id === req.params.id);
+      if (!node) {
+        return res.status(404).json({ ok: false, code: "NOT_FOUND", message: "没有这个节点。" });
+      }
+      if (node.ownerId !== user.id) {
+        return res.status(403).json({ ok: false, code: "NOT_OWNER", message: "只有建立它的人可以改。" });
+      }
+      const validation = validateNodePatch(req.body);
+      if (validation.ok === false) {
+        return res.status(400).json({ ok: false, code: "VALIDATION_ERROR", message: validation.message });
+      }
+      Object.assign(node, validation.value);
+      node.updatedAt = new Date().toISOString();
+      writeCustomNodes(config, data);
+      return res.json({ ok: true, node });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
+  app.delete("/api/nodes/:id", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    try {
+      const data = readCustomNodes(config);
+      const index = data.nodes.findIndex((candidate) => candidate && candidate.id === req.params.id);
+      if (index < 0) {
+        return res.status(404).json({ ok: false, code: "NOT_FOUND", message: "没有这个节点。" });
+      }
+      if (data.nodes[index].ownerId !== user.id) {
+        return res.status(403).json({ ok: false, code: "NOT_OWNER", message: "只有建立它的人可以改。" });
+      }
+      data.nodes.splice(index, 1);
+      data.edges = data.edges.filter((edge) => edge && edge.from !== req.params.id && edge.to !== req.params.id);
+      writeCustomNodes(config, data);
+      return res.json({ ok: true });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
   app.use((req, res) => {
     res.status(404).json({
       ok: false,
@@ -455,6 +555,7 @@ function buildConfig(overrides) {
     sessionsPath: overrides.sessionsPath || path.join(dataDir, "sessions.json"),
     statesDir: overrides.statesDir || path.join(dataDir, "states"),
     recordsPath: overrides.recordsPath || path.join(dataDir, "records.json"),
+    customNodesPath: overrides.customNodesPath || path.join(dataDir, "custom-nodes.json"),
     mediaDir: overrides.mediaDir || path.join(dataDir, "media"),
     bodyLimit: overrides.bodyLimit || "8mb",
     allowedOrigins: normalizeOrigins(overrides.allowedOrigins || process.env.ALLOWED_ORIGINS || ""),
@@ -541,6 +642,88 @@ function readRecords(config) {
   return Array.isArray(records) ? records : [];
 }
 
+function readCustomNodes(config) {
+  const data = readJsonFile(config.customNodesPath, { nodes: [], edges: [] });
+  const nodes = data && Array.isArray(data.nodes) ? data.nodes : [];
+  const edges = data && Array.isArray(data.edges) ? data.edges : [];
+  return { nodes, edges };
+}
+
+function writeCustomNodes(config, data) {
+  writeJsonFile(config.customNodesPath, data);
+}
+
+function hasCustomNode(config, treeId, nodeId) {
+  return readCustomNodes(config).nodes.some((node) => node && node.id === nodeId && node.treeId === treeId);
+}
+
+function createNodeId() {
+  return `n${nodeCrypto.randomBytes(8).toString("hex")}`;
+}
+
+/**
+ * @returns {{ ok: true, value: { title: string, goal: string, estMinutes: number, linkType: string, anchorId: string } } | { ok: false, message: string }}
+ */
+function validateNodePayload(body, config) {
+  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const title = typeof payload.title === "string" ? payload.title.trim() : "";
+  if (Array.from(title).length < 1 || Array.from(title).length > 40) {
+    return { ok: false, message: "写上节点名字。" };
+  }
+  const goal = typeof payload.goal === "string" ? payload.goal.trim() : "";
+  if (Array.from(goal).length < 1 || Array.from(goal).length > 200) {
+    return { ok: false, message: "写上这个节点要达成什么。" };
+  }
+  const estMinutes = payload.estMinutes === undefined ? 10 : payload.estMinutes;
+  if (!Number.isInteger(estMinutes) || estMinutes < 5 || estMinutes > 15) {
+    return { ok: false, message: "建议时长是 5 到 15 分钟。" };
+  }
+  const link = payload.link && typeof payload.link === "object" && !Array.isArray(payload.link) ? payload.link : {};
+  const linkType = link.type;
+  const anchorId = typeof link.anchorId === "string" ? link.anchorId : "";
+  if (
+    (linkType !== "prereq" && linkType !== "instance-of") ||
+    !RECORD_SCOPE_PATTERN.test(anchorId) ||
+    (!getSeedNodeIds().has(anchorId) && !hasCustomNode(config, CUSTOM_NODE_TREE_ID, anchorId))
+  ) {
+    return { ok: false, message: "先选一个已有节点，说明它挂在哪里。" };
+  }
+  return { ok: true, value: { title, goal, estMinutes, linkType, anchorId } };
+}
+
+/**
+ * @returns {{ ok: true, value: { title?: string, goal?: string, estMinutes?: number } } | { ok: false, message: string }}
+ */
+function validateNodePatch(body) {
+  const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const value = {};
+  if (payload.title !== undefined) {
+    const title = typeof payload.title === "string" ? payload.title.trim() : "";
+    if (Array.from(title).length < 1 || Array.from(title).length > 40) {
+      return { ok: false, message: "写上节点名字。" };
+    }
+    value.title = title;
+  }
+  if (payload.goal !== undefined) {
+    const goal = typeof payload.goal === "string" ? payload.goal.trim() : "";
+    if (Array.from(goal).length < 1 || Array.from(goal).length > 200) {
+      return { ok: false, message: "写上这个节点要达成什么。" };
+    }
+    value.goal = goal;
+  }
+  if (payload.estMinutes !== undefined) {
+    const estMinutes = payload.estMinutes;
+    if (!Number.isInteger(estMinutes) || estMinutes < 5 || estMinutes > 15) {
+      return { ok: false, message: "建议时长是 5 到 15 分钟。" };
+    }
+    value.estMinutes = estMinutes;
+  }
+  if (Object.keys(value).length === 0) {
+    return { ok: false, message: "没有要修改的内容。" };
+  }
+  return { ok: true, value };
+}
+
 let seedNodeIdsCache = null;
 
 // 节点标识以仓库种子树为准（k9-math.json 是唯一被接受的知识树）
@@ -562,14 +745,14 @@ function getSeedNodeIds() {
 /**
  * @returns {{ ok: true, value: { treeId: string, nodeId: string, text: string, images: Array<{ mediaType: string, buffer: Buffer }>, eventId: string | null } } | { ok: false, message: string }}
  */
-function validateRecordPayload(body) {
+function validateRecordPayload(body, config) {
   const payload = body && typeof body === "object" && !Array.isArray(body) ? body : {};
   const treeId = typeof payload.treeId === "string" ? payload.treeId : "";
   const nodeId = typeof payload.nodeId === "string" ? payload.nodeId : "";
   if (!RECORD_SCOPE_PATTERN.test(treeId) || !RECORD_SCOPE_PATTERN.test(nodeId)) {
     return { ok: false, message: "树或节点标识不合法。" };
   }
-  if (!getSeedNodeIds().has(nodeId)) {
+  if (!getSeedNodeIds().has(nodeId) && !hasCustomNode(config, treeId, nodeId)) {
     return { ok: false, message: "节点不在已知的知识树里。" };
   }
   const text = typeof payload.text === "string" ? payload.text.trim() : "";
