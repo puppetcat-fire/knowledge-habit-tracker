@@ -732,168 +732,18 @@ button {
   line-height: 1.8;
 }
 
-#overview-platform-entry {
-  cursor: pointer;
+a.icon-button,
+a.overview-card {
+  text-decoration: none;
 }
 
-.platform-shell {
-  display: grid;
-  gap: 18px;
+a.overview-card {
+  color: inherit;
 }
 
-.platform-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.platform-tabs {
-  display: flex;
-  gap: 10px;
-}
-
-.platform-tab {
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--text);
-  border-radius: 999px;
-  padding: 10px 14px;
-  cursor: pointer;
-}
-
-.platform-tab.active {
-  border-color: rgba(33, 111, 102, 0.28);
-  background: var(--primary-soft);
-  color: var(--primary-strong);
-}
-
-.platform-feed,
-.platform-mine {
-  display: grid;
-  gap: 14px;
-}
-
-.platform-feed {
-  grid-template-columns: 1fr;
-  overflow-x: auto;
-}
-
-.tree-plane {
-  position: relative;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.42);
-}
-
-.tree-legend {
-  position: absolute;
-  top: 16px;
-  left: 20px;
-  display: flex;
-  gap: 18px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.tree-legend-item {
+a.icon-button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-}
-
-.tree-legend-swatch {
-  width: 22px;
-  border-top: 2px solid var(--primary);
-}
-
-.tree-legend-swatch.instance {
-  border-top-color: var(--warm);
-  border-top-style: dashed;
-}
-
-.tree-svg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-}
-
-.tree-edge {
-  fill: none;
-  stroke-width: 2;
-}
-
-.tree-edge-prereq {
-  stroke: var(--primary);
-}
-
-.tree-edge-instance {
-  stroke: var(--warm);
-  stroke-dasharray: 5 4;
-}
-
-.tree-node {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  width: 140px;
-  height: 64px;
-  padding: 8px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-md);
-  background: var(--panel-strong);
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  box-shadow: var(--shadow);
-}
-
-.tree-node:hover {
-  border-color: rgba(33, 111, 102, 0.35);
-}
-
-.tree-node:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.node-title {
-  font-weight: 700;
-}
-
-.node-count {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.practice-list {
-  display: grid;
-  gap: 12px;
-}
-
-.practice-image {
-  display: block;
-  margin-top: 10px;
-  max-width: 100%;
-  border-radius: var(--radius-md);
-}
-
-.platform-detail {
-  display: grid;
-  gap: 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xl);
-  background: var(--panel);
-  box-shadow: var(--shadow);
-  padding: 22px;
-}
-
-.platform-detail .platform-detail-back,
-.platform-detail > .icon-button {
-  justify-self: start;
 }
 
 .aim-line {

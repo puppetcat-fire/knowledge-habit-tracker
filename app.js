@@ -53,25 +53,14 @@
   let modalContext = null;
   let seedTrees = [];
   let nodeIndex = new Map();
-  let tutorialIndex = new Map();
   let lightUpByEventId = new Map();
   // 一次性提示（'expired' | 'dangling' | null）：模块级，不进 state、不参与导出
   let lastAimNotice = null;
-  const expandedTutorialIds = new Set();
-  // 平台页是独立内容页：进入时记住来源页，离开时还原；平台内当前分词与详情节点只存在内存里
-  let platformOpen = false;
-  let platformReturnPage = "timer";
-  let platformTab = "feed";
-  let platformDetailNode = null;
-  // 服务器打卡只属于当前打开的那棵树；LOCAL_ONLY 下改由本地内存收集
-  let platformRecords = [];
-  const localPracticeRecords = [];
 
   function bootApp() {
     // 启动顺序：state → 种子树 → 索引 → 清理失效瞄准（只留提示）→ 首次 render()
     seedTrees = loadSeedTrees();
     nodeIndex = buildNodeIndex(seedTrees);
-    tutorialIndex = buildTutorialIndex(seedTrees);
     rebuildLightUpIndex();
     pruneStaleAim();
     bindEvents();
@@ -85,7 +74,6 @@
 
   const elements = {
     hubToggle: document.getElementById("hub-connected"),
-    nav: document.querySelector(".nav"),
     navButtons: Array.from(document.querySelectorAll(".nav-button")),
     pages: Array.from(document.querySelectorAll(".page")),
     overviewToday: document.getElementById("overview-today"),
@@ -144,19 +132,8 @@
     timerHabitLabel: document.getElementById("timer-habit-label"),
     nodeAimLine: document.getElementById("node-aim-line"),
     nodeAimLabel: document.getElementById("node-aim-label"),
-    nodeAimChange: document.getElementById("node-aim-change"),
     nodeAimClear: document.getElementById("node-aim-clear"),
     nodeAimNotice: document.getElementById("node-aim-notice"),
-    platformEntry: document.getElementById("platform-entry"),
-    overviewPlatformEntry: document.getElementById("overview-platform-entry"),
-    platformShell: document.getElementById("platform-shell"),
-    platformBack: document.getElementById("platform-back"),
-    platformTabButtons: Array.from(document.querySelectorAll(".platform-tab")),
-    platformFeed: document.getElementById("platform-feed"),
-    platformMine: document.getElementById("platform-mine"),
-    platformDetail: document.getElementById("platform-detail"),
-    platformDetailBack: document.getElementById("platform-detail-back"),
-    platformDetailBody: document.getElementById("platform-detail-body"),
     backupExportButton: document.getElementById("backup-export"),
     backupFileInput: document.getElementById("backup-file"),
     backupStatus: document.getElementById("backup-status"),
@@ -310,37 +287,9 @@
       renderHabitPicker();
     });
 
-    elements.nodeAimChange.addEventListener("click", () => {
-      enterPlatform();
-    });
-
     elements.nodeAimClear.addEventListener("click", () => {
       setSelectedNode(null, null);
     });
-
-    elements.platformEntry.addEventListener("click", () => {
-      enterPlatform();
-    });
-
-    elements.overviewPlatformEntry.addEventListener("click", () => {
-      enterPlatform();
-    });
-
-    elements.platformBack.addEventListener("click", () => {
-      leavePlatform();
-    });
-
-    elements.platformDetailBack.addEventListener("click", () => {
-      closePlatformDetail();
-    });
-
-    elements.platformTabButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        setPlatformTab(button.dataset.platformTab || "feed");
-      });
-    });
-
-    elements.platformShell.addEventListener("click", handlePlatformActions);
 
     elements.timerSingleLogInput.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -555,10 +504,7 @@
     };
     state.events.unshift(newEvent);
     if (aimNode) {
-      const draft = createLightUpDraft(newEvent);
-      if (draft) {
-        void publishPracticeDraft(draft);
-      }
+      createLightUpDraft(newEvent);
     }
     elements.doneForm.reset();
     saveState();
@@ -673,10 +619,7 @@
 
     state.events.unshift(newEvent);
     if (aimNode) {
-      const draft = createLightUpDraft(newEvent);
-      if (draft) {
-        void publishPracticeDraft(draft);
-      }
+      createLightUpDraft(newEvent);
     }
     state.timer.elapsedMs = 0;
     state.timer.running = false;
@@ -711,7 +654,6 @@
     renderHabitHistory();
     renderDoneList();
     renderQuickNoteList();
-    renderPlatform();
     renderNodeCandidates();
     renderHabitEventGroups();
     renderPeriodViews();
@@ -845,486 +787,6 @@
         `;
       })
       .join("");
-  }
-
-  // 知识平台是一张二维平面：prereq 决定列与顺序，instance-of 的实例挂在原理右下角
-  function renderPlatformFeed() {
-    if (nodeIndex.size === 0) {
-      elements.platformFeed.innerHTML = createEmptyCard("还没有可浏览的内容。");
-      return;
-    }
-    const tree = getActiveTree();
-    if (!tree) {
-      elements.platformFeed.innerHTML = createEmptyCard("还没有可浏览的内容。");
-      return;
-    }
-    elements.platformFeed.innerHTML = buildTreeLayout(tree);
-  }
-
-  function buildTreeLayout(tree) {
-    const NODE_WIDTH = 140;
-    const NODE_HEIGHT = 64;
-    const COLUMN_GAP = 360;
-    const ROW_GAP = 92;
-    const PAD_LEFT = 28;
-    const PAD_TOP = 56;
-    const PLANE_PAD = 28;
-
-    const nodes = Array.isArray(tree.nodes) ? tree.nodes : [];
-    const edges = Array.isArray(tree.edges) ? tree.edges : [];
-    const byId = new Map(nodes.map((node) => [node.id, node]));
-    const prereqEdges = [];
-    const instanceEdges = [];
-    edges.forEach((edge) => {
-      if (!edge || !byId.has(edge.from) || !byId.has(edge.to)) {
-        return;
-      }
-      if (edge.type === "instance-of") {
-        instanceEdges.push(edge);
-      } else if (edge.type === "prereq") {
-        prereqEdges.push(edge);
-      }
-    });
-
-    // 实例节点不进 prereq 的列，只在原理节点右下方单独摆位
-    const instanceIds = new Set(instanceEdges.map((edge) => edge.from));
-    const prereqNodes = nodes.filter((node) => !instanceIds.has(node.id));
-
-    // rank = 1 + 前置 rank 最大值；无前置入边则为 0
-    const rankOf = new Map();
-    function resolveRank(nodeId, visiting) {
-      if (rankOf.has(nodeId)) {
-        return rankOf.get(nodeId);
-      }
-      if (visiting.has(nodeId)) {
-        return 0;
-      }
-      visiting.add(nodeId);
-      let rank = 0;
-      prereqEdges.forEach((edge) => {
-        if (edge.to === nodeId) {
-          rank = Math.max(rank, resolveRank(edge.from, visiting) + 1);
-        }
-      });
-      rankOf.set(nodeId, rank);
-      return rank;
-    }
-    prereqNodes.forEach((node) => resolveRank(node.id, new Set()));
-
-    const maxRank = prereqNodes.reduce((max, node) => Math.max(max, rankOf.get(node.id) || 0), 0);
-    const columns = [];
-    for (let rank = 0; rank <= maxRank; rank += 1) {
-      columns[rank] = [];
-    }
-    prereqNodes.forEach((node) => {
-      columns[rankOf.get(node.id) || 0].push(node);
-    });
-
-    // 列从左到右摆放；同列按前置 y 的平均值排序，无前置则保持原始顺序
-    const position = new Map();
-    for (let rank = 0; rank <= maxRank; rank += 1) {
-      const column = columns[rank];
-      if (!column.length) {
-        continue;
-      }
-      const ordered = column
-        .map((node, index) => ({ node, index, key: averagePredecessorY(node.id) }))
-        .sort((a, b) => (a.key === b.key ? a.index - b.index : a.key - b.key));
-      ordered.forEach((entry, row) => {
-        position.set(entry.node.id, {
-          x: PAD_LEFT + rank * COLUMN_GAP,
-          y: PAD_TOP + row * ROW_GAP
-        });
-      });
-    }
-
-    function averagePredecessorY(nodeId) {
-      let sum = 0;
-      let count = 0;
-      prereqEdges.forEach((edge) => {
-        if (edge.to !== nodeId) {
-          return;
-        }
-        const from = position.get(edge.from);
-        if (!from) {
-          return;
-        }
-        sum += from.y;
-        count += 1;
-      });
-      return count ? sum / count : 0;
-    }
-
-    // 实例放在原理右下方的空档里，不压住原理，也不占后置那一列
-    const siblingIndex = new Map();
-    instanceEdges.forEach((edge) => {
-      const principle = position.get(edge.to);
-      if (!principle) {
-        return;
-      }
-      const index = siblingIndex.get(edge.to) || 0;
-      siblingIndex.set(edge.to, index + 1);
-      position.set(edge.from, {
-        x: principle.x + NODE_WIDTH + 32,
-        y: principle.y + NODE_HEIGHT + 24 + index * (NODE_HEIGHT + 16)
-      });
-    });
-
-    const placedIds = Array.from(position.keys());
-    for (let pass = 0; pass < 40; pass += 1) {
-      let moved = false;
-      for (let i = 0; i < placedIds.length; i += 1) {
-        for (let j = i + 1; j < placedIds.length; j += 1) {
-          const leftId = placedIds[i];
-          const rightId = placedIds[j];
-          const leftPos = position.get(leftId);
-          const rightPos = position.get(rightId);
-          const gap = 12;
-          const hits = leftPos.x < rightPos.x + NODE_WIDTH + gap
-            && rightPos.x < leftPos.x + NODE_WIDTH + gap
-            && leftPos.y < rightPos.y + NODE_HEIGHT + gap
-            && rightPos.y < leftPos.y + NODE_HEIGHT + gap;
-          if (!hits) {
-            continue;
-          }
-          const lowerId = leftPos.y > rightPos.y ? leftId : rightId;
-          const lowerPos = position.get(lowerId);
-          const upperPos = lowerId === leftId ? rightPos : leftPos;
-          position.set(lowerId, {
-            x: lowerPos.x,
-            y: upperPos.y + NODE_HEIGHT + 16
-          });
-          moved = true;
-        }
-      }
-      if (!moved) {
-        break;
-      }
-    }
-
-    let contentRight = 0;
-    let contentBottom = 0;
-    position.forEach((pos) => {
-      contentRight = Math.max(contentRight, pos.x + NODE_WIDTH);
-      contentBottom = Math.max(contentBottom, pos.y + NODE_HEIGHT);
-    });
-    const planeWidth = contentRight + PLANE_PAD;
-    const planeHeight = contentBottom + PLANE_PAD;
-
-    function buildLine(edge, className) {
-      const from = position.get(edge.from);
-      const to = position.get(edge.to);
-      if (!from || !to) {
-        return "";
-      }
-      const x1 = from.x + NODE_WIDTH / 2;
-      const y1 = from.y + NODE_HEIGHT / 2;
-      const x2 = to.x + NODE_WIDTH / 2;
-      const y2 = to.y + NODE_HEIGHT / 2;
-      return `<line class="tree-edge ${className}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" />`;
-    }
-
-    const lines = prereqEdges
-      .map((edge) => buildLine(edge, "tree-edge-prereq"))
-      .concat(instanceEdges.map((edge) => buildLine(edge, "tree-edge-instance")))
-      .join("");
-    const buttons = nodes
-      .filter((node) => position.has(node.id))
-      .map((node) => renderTreeNode(tree.tree.id, node, position.get(node.id)))
-      .join("");
-
-    return `
-      <div class="tree-plane" style="width: ${planeWidth}px; height: ${planeHeight}px">
-        <div class="tree-legend">
-          <span class="tree-legend-item"><span class="tree-legend-swatch prereq"></span>前置 → 后置</span>
-          <span class="tree-legend-item"><span class="tree-legend-swatch instance"></span>实例 → 原理</span>
-        </div>
-        <svg class="tree-svg" width="${planeWidth}" height="${planeHeight}" aria-hidden="true">
-          ${lines}
-        </svg>
-        ${buttons}
-      </div>
-    `;
-  }
-
-  function renderTreeNode(treeId, node, pos) {
-    const count = recordsForNode(treeId, node.id).length;
-    return `
-      <button
-        class="tree-node node-row"
-        style="left: ${pos.x}px; top: ${pos.y}px"
-        type="button"
-        data-action="platform-view"
-        data-tree-id="${escapeAttribute(treeId)}"
-        data-node-id="${escapeAttribute(node.id)}"
-      >
-        <span class="node-title">${escapeHtml(nodeTitle(node))}</span>
-        <span class="node-count">${count} 次打卡</span>
-      </button>
-    `;
-  }
-
-  function renderPlatformMine() {
-    if (nodeIndex.size === 0) {
-      elements.platformMine.innerHTML = "";
-      return;
-    }
-    if (!state.forest.lightups.length) {
-      elements.platformMine.innerHTML = createEmptyCard("还没有发出过。完成一次挂节点的记录后，这里会出现待发出的说法。");
-      return;
-    }
-    // 待发出排最前：它们还等着一次「发出」；sort 稳定，同状态内保持原有顺序
-    const ordered = state.forest.lightups
-      .slice()
-      .sort((a, b) => (a.status === b.status ? 0 : a.status === "draft" ? -1 : 1));
-    elements.platformMine.innerHTML = ordered.map(renderLightUpCard).join("");
-  }
-
-  function renderLightUpCard(lightUp) {
-    const badge = `${lightUp.status === "confirmed" ? "已发出" : "待发出"} · ${resolveNodeTitle(lightUp.treeId, lightUp.nodeId)}`;
-    const detail = lightUp.evidence && lightUp.evidence.detail
-      ? `<div class="habit-log">${escapeHtml(lightUp.evidence.detail)}</div>`
-      : "";
-    const confirmButton = lightUp.status === "confirmed"
-      ? ""
-      : `<button class="action-button" type="button" data-action="platform-confirm" data-id="${escapeAttribute(lightUp.id)}">发出</button>`;
-    return `
-      <article class="done-item">
-        <h4>${escapeHtml(badge)}</h4>
-        <div class="done-meta">${formatDateTime(lightUp.evidence.timestamp)}</div>
-        ${detail}
-        <div class="item-actions">
-          ${confirmButton}
-          <button class="action-button danger" type="button" data-action="platform-delete" data-id="${escapeAttribute(lightUp.id)}">删除</button>
-        </div>
-      </article>
-    `;
-  }
-
-  function renderPlatformDetail() {
-    if (!platformDetailNode) {
-      elements.platformDetailBody.innerHTML = "";
-      return;
-    }
-    const { treeId, nodeId } = platformDetailNode;
-    const node = getNodeById(treeId, nodeId);
-    if (!node) {
-      elements.platformDetailBody.innerHTML = createEmptyCard("找不到这个节点。");
-      return;
-    }
-    const records = recordsForNode(treeId, nodeId);
-    const recordsHtml = records.length
-      ? records.map(renderPracticeRecord).join("")
-      : `<div class="meta-note">还没有人在这里打过卡。</div>`;
-    const tutorials = getTutorialsForNode(treeId, nodeId);
-    const tutorialHtml = tutorials.length
-      ? tutorials.map(renderTutorialCard).join("")
-      : `<div class="meta-note">这个节点还没有方法。</div>`;
-    elements.platformDetailBody.innerHTML = `
-      <h2>${escapeHtml(nodeTitle(node))}</h2>
-      <div class="done-meta">${escapeHtml(node.goal || "暂无目标说明")}</div>
-      <div class="stack-block">
-        <div class="meta-note">打卡记录</div>
-        <div class="practice-list">${recordsHtml}</div>
-      </div>
-      <div class="stack-block">
-        <label class="field">
-          <span>记一次</span>
-          <textarea id="practice-text" rows="3" maxlength="400" placeholder="写下这一次实际做了什么"></textarea>
-        </label>
-        <label class="field">
-          <span>图片</span>
-          <input id="practice-image" type="file" accept="image/*" multiple />
-        </label>
-        <div id="practice-status" class="report hidden"></div>
-        <button class="primary" type="button" data-action="platform-submit">记一次</button>
-      </div>
-      <div class="stack-block">
-        <div class="meta-note">方法（默认折叠）</div>
-        ${tutorialHtml}
-      </div>
-      <button
-        class="primary"
-        type="button"
-        data-action="platform-do"
-        data-tree-id="${escapeAttribute(treeId)}"
-        data-node-id="${escapeAttribute(nodeId)}"
-      >去做</button>
-    `;
-
-    Array.from(elements.platformDetailBody.querySelectorAll(".tutorial-toggle")).forEach((button) => {
-      button.addEventListener("click", () => {
-        toggleTutorial(button.dataset.tutorialId);
-      });
-    });
-  }
-
-  function renderPracticeRecord(record) {
-    const images = Array.isArray(record.images) ? record.images.filter((image) => image && image.id) : [];
-    const imagesHtml = images
-      .map((image) => `<img class="practice-image" src="/api/media/${escapeAttribute(image.id)}" alt="">`)
-      .join("");
-    const textHtml = record.text ? `<div class="habit-log">${escapeHtml(record.text)}</div>` : "";
-    return `
-      <article class="done-item">
-        <div class="done-meta">${escapeHtml(record.authorName || "我")} · ${formatDateTime(record.createdAt)}</div>
-        ${textHtml}
-        ${imagesHtml}
-      </article>
-    `;
-  }
-
-  // 服务器打卡 + 当前用户挂在这个节点上的 lightup（按 eventId 去重），新的在前
-  function recordsForNode(treeId, nodeId) {
-    const source = LOCAL_ONLY ? localPracticeRecords : platformRecords;
-    const server = source.filter((record) => record.treeId === treeId && record.nodeId === nodeId);
-    const serverEventIds = new Set(server.map((record) => record.eventId).filter(Boolean));
-    const own = state.forest.lightups
-      .filter((lightUp) => lightUp.treeId === treeId && lightUp.nodeId === nodeId)
-      .filter((lightUp) => !(lightUp.eventId && serverEventIds.has(lightUp.eventId)))
-      .map((lightUp) => ({
-        id: lightUp.id,
-        treeId,
-        nodeId,
-        authorName: "我",
-        createdAt: lightUp.evidence.timestamp || lightUp.createdAt,
-        text: lightUp.evidence.detail || "",
-        images: []
-      }));
-    return server.concat(own).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-  }
-
-  function mergePlatformRecord(record) {
-    if (!record || !record.id) {
-      return;
-    }
-    const duplicate = platformRecords.some(
-      (item) => item.id === record.id || (record.eventId && item.eventId === record.eventId)
-    );
-    if (!duplicate) {
-      platformRecords.unshift(record);
-    }
-  }
-
-  async function loadPlatformRecords() {
-    const tree = getActiveTree();
-    if (!tree) {
-      return;
-    }
-    try {
-      const response = await window.fetch(`/api/records?treeId=${encodeURIComponent(tree.tree.id)}`, {
-        credentials: "same-origin"
-      });
-      if (!response.ok) {
-        return;
-      }
-      const data = await readJsonResponse(response);
-      platformRecords = data && Array.isArray(data.records) ? data.records : [];
-      renderPlatform();
-    } catch {
-      // 拉取失败时保持已有列表，不打断浏览
-    }
-  }
-
-  function setPracticeStatus(message) {
-    const status = document.getElementById("practice-status");
-    if (!status) {
-      return;
-    }
-    status.textContent = message || "";
-    status.classList.toggle("hidden", !message);
-  }
-
-  async function submitPracticeRecord() {
-    if (!platformDetailNode) {
-      return;
-    }
-    const { treeId, nodeId } = platformDetailNode;
-    const textInput = document.getElementById("practice-text");
-    const imageInput = document.getElementById("practice-image");
-    const text = textInput ? textInput.value.trim() : "";
-    if (LOCAL_ONLY) {
-      if (!text) {
-        setPracticeStatus("写点文字再记一次。");
-        return;
-      }
-      localPracticeRecords.unshift({
-        id: createId(),
-        treeId,
-        nodeId,
-        authorName: "我",
-        createdAt: new Date().toISOString(),
-        text,
-        images: [],
-        eventId: null
-      });
-      renderPlatform();
-      return;
-    }
-    let images = [];
-    try {
-      images = await collectPracticeImages(imageInput);
-    } catch {
-      setPracticeStatus("图片读取失败，请重试。");
-      return;
-    }
-    if (!text && !images.length) {
-      setPracticeStatus("写点文字或选一张图片。");
-      return;
-    }
-    const result = await postPracticeRecord({ treeId, nodeId, text, images });
-    if (!result.ok) {
-      setPracticeStatus(result.message || "记录失败，请稍后再试。");
-      return;
-    }
-    renderPlatform();
-  }
-
-  async function collectPracticeImages(input) {
-    if (!input || !input.files) {
-      return [];
-    }
-    const files = Array.from(input.files).slice(0, 4);
-    const images = [];
-    for (const file of files) {
-      const dataUrl = await readFileAsDataUrl(file);
-      images.push({ mediaType: file.type, dataUrl });
-    }
-    return images;
-  }
-
-  function readFileAsDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(reader.error || new Error("图片读取失败"));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  async function postPracticeRecord(payload) {
-    try {
-      const response = await window.fetch("/api/records", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await readJsonResponse(response);
-      if (!response.ok || !data || !data.ok || !data.record) {
-        return { ok: false, message: (data && data.message) || "记录失败，请稍后再试。" };
-      }
-      mergePlatformRecord(data.record);
-      return { ok: true, record: data.record };
-    } catch {
-      return { ok: false, message: "无法连接到本地服务，请确认服务端已启动。" };
-    }
-  }
-
-  function renderPlatform() {
-    renderPlatformFeed();
-    renderPlatformMine();
-    renderPlatformDetail();
   }
 
   function renderNodeCandidates() {
@@ -1559,40 +1021,6 @@
     }
   }
 
-  // 默认折叠：展开之前 method 不写进 DOM，折叠才能被断言而不是只做视觉隐藏
-  function renderTutorialCard(tutorial) {
-    const expanded = expandedTutorialIds.has(tutorial.id);
-    const method = expanded ? `<div class="habit-log">${escapeHtml(tutorial.method || "")}</div>` : "";
-    return `
-      <article class="done-item">
-        <div class="group-header">
-          <h4>${escapeHtml(tutorial.title || tutorial.id)}</h4>
-          <button
-            class="action-button tutorial-toggle"
-            type="button"
-            data-tutorial-id="${escapeAttribute(tutorial.id)}"
-            aria-expanded="${expanded}"
-          >
-            ${expanded ? "收起" : "展开"}
-          </button>
-        </div>
-        ${method}
-      </article>
-    `;
-  }
-
-  function toggleTutorial(tutorialId) {
-    if (!tutorialId) {
-      return;
-    }
-    if (expandedTutorialIds.has(tutorialId)) {
-      expandedTutorialIds.delete(tutorialId);
-    } else {
-      expandedTutorialIds.add(tutorialId);
-    }
-    renderPlatformDetail();
-  }
-
   function renderBackupStatus() {
     if (!state.settings.lastBackupAt) {
       showMessage(
@@ -1631,103 +1059,14 @@
 
   function setActivePage(page) {
     activePage = page;
-    // 平台打开时保持日常 nav 与四个 page 全部隐藏，render() 不能把它们抖出来
     elements.pages.forEach((section) => {
-      section.classList.toggle("hidden", platformOpen || section.dataset.page !== page);
+      section.classList.toggle("hidden", section.dataset.page !== page);
     });
-    elements.nav.classList.toggle("hidden", platformOpen);
     elements.navButtons.forEach((button) => {
       button.classList.toggle("active", button.dataset.pageTarget === page);
     });
-    if (page === "bug" && !platformOpen) {
+    if (page === "bug") {
       void loadRemoteBugs();
-    }
-  }
-
-  // 平台是独立内容页：藏起日常 nav 和四个 page，离开时还原到进入前那一页
-  function enterPlatform() {
-    platformReturnPage = activePage;
-    platformOpen = true;
-    platformDetailNode = null;
-    renderPlatform();
-    resetExpandedTutorials();
-    setPlatformTab("feed");
-    elements.nav.classList.add("hidden");
-    elements.pages.forEach((section) => section.classList.add("hidden"));
-    elements.platformShell.classList.remove("hidden");
-    if (!LOCAL_ONLY) {
-      void loadPlatformRecords();
-    }
-  }
-
-  function leavePlatform() {
-    platformOpen = false;
-    elements.platformShell.classList.add("hidden");
-    setActivePage(platformReturnPage);
-  }
-
-  function setPlatformTab(tab) {
-    platformTab = tab === "mine" ? "mine" : "feed";
-    platformDetailNode = null;
-    elements.platformTabButtons.forEach((button) => {
-      button.classList.toggle("active", button.dataset.platformTab === platformTab);
-    });
-    elements.platformFeed.classList.toggle("hidden", platformTab !== "feed");
-    elements.platformMine.classList.toggle("hidden", platformTab !== "mine");
-    elements.platformDetail.classList.add("hidden");
-  }
-
-  function openPlatformDetail(treeId, nodeId) {
-    platformDetailNode = { treeId, nodeId };
-    renderPlatformDetail();
-    elements.platformFeed.classList.add("hidden");
-    elements.platformMine.classList.add("hidden");
-    elements.platformDetail.classList.remove("hidden");
-  }
-
-  function closePlatformDetail() {
-    platformDetailNode = null;
-    resetExpandedTutorials();
-    elements.platformDetailBody.innerHTML = "";
-    setPlatformTab("feed");
-  }
-
-  function resetExpandedTutorials() {
-    expandedTutorialIds.clear();
-  }
-
-  // 「去做」：瞄准节点、按需补上预测文字，然后离开平台直达计时页
-  function aimAndGo(treeId, nodeId) {
-    setSelectedNode(treeId, nodeId);
-    if (!elements.timerPredictionInput.value.trim()) {
-      const node = getNodeById(treeId, nodeId);
-      const title = node ? nodeTitle(node) : "";
-      state.timer.predictedAction = title;
-      elements.timerPredictionInput.value = title;
-      saveState();
-      renderTimer();
-    }
-    platformReturnPage = "timer";
-    leavePlatform();
-  }
-
-  function handlePlatformActions(event) {
-    const target = /** @type {HTMLElement} */ (event.target);
-    const button = target.closest("[data-action]");
-    if (!button) {
-      return;
-    }
-    const action = button.dataset.action;
-    if (action === "platform-view") {
-      openPlatformDetail(button.dataset.treeId, button.dataset.nodeId);
-    } else if (action === "platform-do") {
-      aimAndGo(button.dataset.treeId, button.dataset.nodeId);
-    } else if (action === "platform-submit") {
-      void submitPracticeRecord();
-    } else if (action === "platform-confirm") {
-      confirmLightUp(button.dataset.id);
-    } else if (action === "platform-delete") {
-      deleteLightUp(button.dataset.id);
     }
   }
 
@@ -2362,20 +1701,6 @@
     return index;
   }
 
-  function buildTutorialIndex(trees) {
-    const index = new Map();
-    trees.forEach((tree) => {
-      (Array.isArray(tree.tutorials) ? tree.tutorials : []).forEach((tutorial) => {
-        if (!tutorial || typeof tutorial.id !== "string" || typeof tutorial.nodeId !== "string") {
-          return;
-        }
-        const key = `${tree.tree.id}::${tutorial.nodeId}`;
-        index.set(key, (index.get(key) || []).concat(tutorial));
-      });
-    });
-    return index;
-  }
-
   function nodeTitle(node) {
     return node && typeof node.title === "string" && node.title ? node.title : node && node.id ? node.id : "";
   }
@@ -2391,16 +1716,12 @@
     return nodeIndex.get(`${treeId}::${nodeId}`) || null;
   }
 
-  function getTutorialsForNode(treeId, nodeId) {
-    return tutorialIndex.get(`${treeId}::${nodeId}`) || [];
-  }
-
   function resolveNodeTitle(treeId, nodeId) {
     return nodeTitle(getNodeById(treeId, nodeId)) || nodeId;
   }
 
   // lightups 只有这一份内存索引：凡是改动 state.forest.lightups 的路径都必须重建，
-  // 否则事件徽标会读到旧索引（确认、删除、级联清理三条路径都在重建）。
+  // 否则事件徽标会读到旧索引（新建草稿与级联清理两条路径都在重建）。
   function rebuildLightUpIndex() {
     lightUpByEventId = new Map();
     state.forest.lightups.forEach((lightUp) => {
@@ -2528,46 +1849,6 @@
     state.forest.selectedNodeId = null;
     state.forest.selectedNodeAt = null;
     return lightUp;
-  }
-
-  // 对着节点做完的那一次也是这个节点上的一条打卡：草稿一出现就写服务端，不等「发出」
-  async function publishPracticeDraft(draft) {
-    if (LOCAL_ONLY || !draft || !draft.treeId || !draft.nodeId) {
-      return;
-    }
-    const result = await postPracticeRecord({
-      treeId: draft.treeId,
-      nodeId: draft.nodeId,
-      text: draft.evidence.detail || "",
-      eventId: draft.eventId
-    });
-    if (result.ok && platformOpen) {
-      renderPlatform();
-    }
-  }
-
-  // L1 自证：一次点击即确认，不打分、不判题。已确认的重复调用不改状态（幂等）。
-  function confirmLightUp(id) {
-    const lightUp = state.forest.lightups.find((item) => item.id === id);
-    if (!lightUp || lightUp.status === "confirmed") {
-      return;
-    }
-    lightUp.status = "confirmed";
-    lightUp.confirmedAt = new Date().toISOString();
-    rebuildLightUpIndex();
-    saveState();
-    render();
-  }
-
-  function deleteLightUp(id) {
-    const remaining = state.forest.lightups.filter((item) => item.id !== id);
-    if (remaining.length === state.forest.lightups.length) {
-      return;
-    }
-    state.forest.lightups = remaining;
-    rebuildLightUpIndex();
-    saveState();
-    render();
   }
 
   function normalizeState(raw) {

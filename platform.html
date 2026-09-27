@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="知识共建共享平台：节点上挂的是人真正做过的一次。" />
+    <title>知识共建共享平台</title>
+    <link rel="stylesheet" href="platform.css" />
+  </head>
+  <body>
+    <section id="account-gate" class="account-gate" aria-label="账号">
+      <div class="account-card">
+        <p class="eyebrow">Knowledge Commons</p>
+        <h1>知识共建共享平台</h1>
+        <p class="account-lead">节点上挂的是人真正做过的一次。</p>
+        <form id="account-form" class="form">
+          <label class="field">
+            <span>名字</span>
+            <input
+              id="account-name"
+              type="text"
+              maxlength="24"
+              autocomplete="username"
+              placeholder="2–24 个字符"
+            />
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <input
+              id="account-password"
+              type="password"
+              maxlength="72"
+              autocomplete="new-password"
+              placeholder="8–72 个字符"
+            />
+          </label>
+          <button id="account-submit" class="primary" type="submit">注册并进入</button>
+        </form>
+        <div class="account-modes" role="group" aria-label="注册或登录">
+          <button id="account-mode-register" class="account-mode-button active" type="button">注册</button>
+          <button id="account-mode-login" class="account-mode-button" type="button">登录</button>
+        </div>
+        <div id="account-error" class="report hidden" role="alert"></div>
+      </div>
+    </section>
+
+    <div id="platform-root" class="platform-root hidden">
+      <header class="platform-bar">
+        <h1 class="platform-title">知识共建共享平台</h1>
+        <div class="platform-bar-actions">
+          <a class="platform-link" href="http://127.0.0.1:3000/">习惯记录</a>
+          <button id="account-logout" class="link-button" type="button">退出</button>
+        </div>
+      </header>
+
+      <main class="platform-stage">
+        <section id="platform-feed" class="platform-feed"></section>
+        <aside id="platform-detail" class="platform-detail hidden" aria-label="节点详情">
+          <button id="platform-detail-back" class="link-button" type="button">回到树</button>
+          <div id="platform-detail-body" class="detail-body"></div>
+        </aside>
+      </main>
+    </div>
+
+    <script src="seed-trees/seed-trees.js"></script>
+    <script src="platform.js"></script>
+  </body>
+</html>

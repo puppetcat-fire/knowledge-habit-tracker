@@ -1,10 +1,39 @@
-const { loadApp, getState } = require("./harness");
+const { loadPlatform, getState } = require("./platform-harness");
 
 const TREE_ID = "k9-math";
 const NODE_ID = "linear-equation";
+const HABIT_ORIGIN = "http://127.0.0.1:3000";
 
-function enterPlatform() {
-  document.getElementById("platform-entry").click();
+let restoreLocation = null;
+
+// jsdom 的 location.assign 是不可重定义的实例属性，直接换掉整个 window.location 来避免真的跳转
+function stubLocationAssign() {
+  const original = Object.getOwnPropertyDescriptor(window, "location");
+  const assign = vi.fn();
+  Object.defineProperty(window, "location", { configurable: true, value: { assign } });
+  restoreLocation = () => Object.defineProperty(window, "location", original);
+  return assign;
+}
+
+function habitState(overrides = {}) {
+  return {
+    version: 3,
+    habit: null,
+    habitHistory: [],
+    events: [],
+    timer: {
+      elapsedMs: 0,
+      running: false,
+      startedAt: null,
+      predictedAction: "",
+      selectedOption: "custom",
+      selectedHabitId: null,
+      selectedHabitName: "自由记录"
+    },
+    settings: { hubConnected: false, lastBackupAt: null },
+    forest: { activeTreeId: null, selectedNodeId: null, selectedNodeAt: null, lightups: [] },
+    ...overrides
+  };
 }
 
 function nodeRow(nodeId = NODE_ID) {
@@ -19,20 +48,35 @@ function detailDoButton() {
   return document.querySelector("#platform-detail-body [data-action='platform-do']");
 }
 
-describe("the knowledge platform is a separate content page", () => {
+describe("the knowledge platform is a standalone dark page", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    if (restoreLocation) {
+      restoreLocation();
+      restoreLocation = null;
+    }
   });
 
-  it("keeps the daily navigation at four buttons", () => {
-    loadApp();
+  it("uses its own dark shell: no habit nav, a link back to the habit page, and its own login copy", () => {
+    loadPlatform();
 
-    expect(document.querySelectorAll(".nav .nav-button")).toHaveLength(4);
+    expect(document.querySelectorAll(".nav-button")).toHaveLength(0);
+    expect(document.querySelector(".platform-shell")).toBeNull();
+
+    const link = document.querySelector(`.platform-bar a[href='${HABIT_ORIGIN}/']`);
+    expect(link).not.toBeNull();
+    expect(link.textContent).toContain("习惯记录");
+    expect(document.querySelector(".platform-title").textContent).toContain("知识共建共享平台");
+
+    expect(document.querySelector("#account-gate h1").textContent).toBe("知识共建共享平台");
+    expect(document.querySelector(".account-lead").textContent).toBe("节点上挂的是人真正做过的一次。");
+
+    expect(document.body.textContent).not.toContain("专注计时");
+    expect(document.body.textContent).not.toContain("反馈与安全");
   });
 
   it("lays the seed nodes out as a two-dimensional plane instead of an indented list", () => {
-    loadApp();
-    enterPlatform();
+    loadPlatform();
 
     const feed = document.getElementById("platform-feed");
     expect(feed.querySelector(".tree-plane")).not.toBeNull();
@@ -57,9 +101,11 @@ describe("the knowledge platform is a separate content page", () => {
 
     // 前置在左，后置在右
     expect(left("natural-numbers")).toBeLessThan(left("integers"));
-    // 实例在原理的右下方，节点方块互不重叠
+    // 实例在原理的右下方
     expect(top("chase-problem")).toBeGreaterThan(top("linear-equation"));
     expect(left("chase-problem")).toBeGreaterThan(left("linear-equation"));
+
+    // 任意两节点满足 x 间隔 ≥140 或 y 间隔 ≥64
     const boxes = Array.from(document.querySelectorAll("#platform-feed .tree-node")).map((node) => ({
       x: Number.parseFloat(node.style.left),
       y: Number.parseFloat(node.style.top)
@@ -75,8 +121,7 @@ describe("the knowledge platform is a separate content page", () => {
   });
 
   it("keeps tutorial methods out of the tree and expands them only in the detail", () => {
-    loadApp();
-    enterPlatform();
+    loadPlatform();
 
     // 种子教程正文里有「过等号变号」，树里不能出现，教程标题也不进树
     const feed = document.getElementById("platform-feed");
@@ -98,13 +143,13 @@ describe("the knowledge platform is a separate content page", () => {
     expect(getState()).toBeNull();
 
     document.getElementById("platform-detail-back").click();
-    expect(document.getElementById("platform-detail").classList.contains("hidden")).toBe(true);
+    expect(detail.classList.contains("hidden")).toBe(true);
     expect(document.getElementById("platform-feed").classList.contains("hidden")).toBe(false);
   });
 
-  it("does 去做 aim the node, fill the prediction, and land on the timer page", () => {
-    loadApp();
-    enterPlatform();
+  it("does 去做 aim the node and hand off to the habit service", () => {
+    const assign = stubLocationAssign();
+    loadPlatform();
 
     openNode("like-terms");
     detailDoButton().click();
@@ -112,71 +157,89 @@ describe("the knowledge platform is a separate content page", () => {
     const state = getState();
     expect(state.forest.selectedNodeId).toBe("like-terms");
     expect(state.forest.activeTreeId).toBe(TREE_ID);
-    expect(document.getElementById("timer-prediction").value).toBe("合并同类项");
-    expect(document.getElementById("platform-shell").classList.contains("hidden")).toBe(true);
-    expect(document.querySelector(".page[data-page='timer']").classList.contains("hidden")).toBe(false);
-    expect(document.querySelector(".nav").classList.contains("hidden")).toBe(false);
+    expect(typeof state.forest.selectedNodeAt).toBe("string");
+    expect(state.timer.predictedAction).toBe("合并同类项");
+    // 写出的对象被 app.js 的 normalizeState 接住：缺的字段都补上了
+    expect(state.version).toBe(3);
+    expect(state.habit).toBeNull();
+    expect(Array.isArray(state.events)).toBe(true);
+    expect(Array.isArray(state.habitHistory)).toBe(true);
+    expect(state.settings).toBeTruthy();
+    expect(assign).toHaveBeenCalledWith(HABIT_ORIGIN + "/");
   });
 
-  it("keeps existing prediction text when 去做 runs", () => {
-    loadApp();
-    document.getElementById("timer-prediction").value = "已经写好的一句话";
-    document.getElementById("timer-prediction").dispatchEvent(new Event("input", { bubbles: true }));
-    enterPlatform();
+  it("keeps an existing prediction when 去做 runs", () => {
+    const assign = stubLocationAssign();
+    const seedState = habitState();
+    seedState.timer.predictedAction = "已经写好的一句话";
+    loadPlatform({ seedState });
 
     openNode("like-terms");
     detailDoButton().click();
 
-    expect(document.getElementById("timer-prediction").value).toBe("已经写好的一句话");
+    expect(getState().timer.predictedAction).toBe("已经写好的一句话");
     expect(getState().forest.selectedNodeId).toBe("like-terms");
+    expect(assign).toHaveBeenCalledWith(HABIT_ORIGIN + "/");
   });
 
-  it("shows the aim line with the node, and 换一条 goes back to the platform", () => {
-    loadApp();
-    enterPlatform();
-    openNode("like-terms");
-    detailDoButton().click();
+  it("confirms a draft light-up from the node detail, idempotently", () => {
+    loadPlatform({
+      seedState: habitState({
+        forest: {
+          activeTreeId: TREE_ID,
+          selectedNodeId: null,
+          selectedNodeAt: null,
+          lightups: [
+            {
+              id: "l-draft",
+              treeId: TREE_ID,
+              nodeId: NODE_ID,
+              status: "draft",
+              eventId: null,
+              evidence: { type: "self", detail: "我推了一遍移项", timestamp: "2026-09-24T10:00:00.000Z" },
+              createdAt: "2026-09-24T10:00:00.000Z"
+            }
+          ]
+        }
+      })
+    });
 
-    const line = document.getElementById("node-aim-line");
-    expect(line.classList.contains("hidden")).toBe(false);
-    expect(document.getElementById("node-aim-label").textContent).toBe("这次对着：合并同类项 · 建议 10 分钟");
+    openNode();
 
-    document.getElementById("node-aim-change").click();
+    const confirmButton = document.querySelector("#platform-detail-body [data-action='platform-confirm']");
+    expect(confirmButton).not.toBeNull();
+    confirmButton.click();
 
-    expect(document.getElementById("platform-shell").classList.contains("hidden")).toBe(false);
+    let state = getState();
+    expect(state.forest.lightups).toHaveLength(1);
+    expect(state.forest.lightups[0].status).toBe("confirmed");
+    const firstConfirmedAt = state.forest.lightups[0].confirmedAt;
+    expect(firstConfirmedAt).toBeTruthy();
 
-    document.getElementById("platform-back").click();
-    document.getElementById("node-aim-clear").click();
+    // 已确认的按钮不再出现；直接派发一次确认，验证幂等
+    const probe = document.createElement("button");
+    probe.setAttribute("data-action", "platform-confirm");
+    probe.setAttribute("data-id", "l-draft");
+    document.getElementById("platform-detail-body").appendChild(probe);
+    probe.click();
 
-    expect(line.classList.contains("hidden")).toBe(true);
-    expect(getState().forest.selectedNodeId).toBeNull();
+    state = getState();
+    expect(state.forest.lightups).toHaveLength(1);
+    expect(state.forest.lightups[0].status).toBe("confirmed");
+    expect(state.forest.lightups[0].confirmedAt).toBe(firstConfirmedAt);
   });
 
-  it("opens the platform from the overview header card and returns to overview", () => {
-    loadApp();
-    document.querySelector(".nav-button[data-page-target='overview']").click();
+  it("shows an empty feed with one warning when the seed bundle is missing", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    document.getElementById("overview-platform-entry").click();
-    expect(document.getElementById("platform-shell").classList.contains("hidden")).toBe(false);
+    loadPlatform({ withSeedBundle: false });
 
-    document.getElementById("platform-back").click();
-    expect(document.getElementById("platform-shell").classList.contains("hidden")).toBe(true);
-    expect(document.querySelector(".page[data-page='overview']").classList.contains("hidden")).toBe(false);
-  });
-
-  it("hides the aim line and shows an empty feed when the seed bundle is missing", () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-
-    loadApp({ withSeedBundle: false });
-
-    expect(document.getElementById("node-aim-line").classList.contains("hidden")).toBe(true);
-    enterPlatform();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(document.getElementById("platform-feed").textContent).toContain("还没有可浏览的内容");
   });
 
   it("draws a LOCAL_ONLY practice entry into the detail without hitting the server", () => {
-    loadApp();
-    enterPlatform();
+    loadPlatform();
     openNode();
 
     const textarea = document.getElementById("practice-text");

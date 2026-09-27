@@ -7,7 +7,7 @@ const ROOT_DIR = __dirname;
 const SESSION_COOKIE = "kht_session";
 const SCRYPT_KEYLEN = 64;
 const STATE_VERSION_MAX = 3;
-const PUBLIC_FILES = new Map([
+const HABIT_PUBLIC_FILES = new Map([
   ["/", "index.html"],
   ["/index.html", "index.html"],
   ["/app.js", "app.js"],
@@ -16,6 +16,19 @@ const PUBLIC_FILES = new Map([
   ["/overlay.js", "overlay.js"],
   ["/seed-trees/seed-trees.js", "seed-trees/seed-trees.js"]
 ]);
+
+const PLATFORM_PUBLIC_FILES = new Map([
+  ["/", "platform.html"],
+  ["/platform.html", "platform.html"],
+  ["/platform.js", "platform.js"],
+  ["/platform.css", "platform.css"],
+  ["/seed-trees/seed-trees.js", "seed-trees/seed-trees.js"]
+]);
+
+const SERVICE_NAMES = {
+  habit: "knowledge-habit-tracker",
+  platform: "knowledge-platform"
+};
 
 const SEED_NODE_FILE = path.join(ROOT_DIR, "seed-trees", "k9-math.json");
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -63,7 +76,8 @@ function createApp(overrides = {}) {
     });
   }
 
-  PUBLIC_FILES.forEach((fileName, route) => {
+  const publicFiles = config.surface === "platform" ? PLATFORM_PUBLIC_FILES : HABIT_PUBLIC_FILES;
+  publicFiles.forEach((fileName, route) => {
     app.get(route, (req, res) => {
       if (fileName.endsWith(".html")) {
         res.setHeader("Cache-Control", "no-store");
@@ -77,7 +91,7 @@ function createApp(overrides = {}) {
   app.get("/health", (req, res) => {
     res.json({
       status: "ok",
-      service: "knowledge-habit-tracker",
+      service: SERVICE_NAMES[config.surface],
       time: new Date().toISOString(),
       host: config.host,
       rateLimitEnabled: config.rateLimitEnabled,
@@ -430,7 +444,9 @@ function createApp(overrides = {}) {
 function buildConfig(overrides) {
   const dataDir = overrides.dataDir || process.env.DATA_DIR || path.join(ROOT_DIR, "data");
   return {
+    surface: overrides.surface === "platform" ? "platform" : "habit",
     port: Number(overrides.port || process.env.PORT || 3000),
+    platformPort: Number(overrides.platformPort || process.env.PLATFORM_PORT || 3001),
     host: overrides.host || process.env.HOST || "127.0.0.1",
     trustProxy: overrides.trustProxy || process.env.TRUST_PROXY || false,
     dataDir,
@@ -791,10 +807,15 @@ function createId() {
 }
 
 function startServer(overrides = {}) {
-  const { app, config } = createApp(overrides);
-  return app.listen(config.port, config.host, () => {
-    console.log(`Knowledge Habit Tracker running at http://${config.host}:${config.port}`);
+  const habit = createApp({ ...overrides, surface: "habit" });
+  const platform = createApp({ ...overrides, surface: "platform" });
+  const habitServer = habit.app.listen(habit.config.port, habit.config.host, () => {
+    console.log(`习惯记录 http://${habit.config.host}:${habit.config.port}`);
   });
+  const platformServer = platform.app.listen(platform.config.platformPort, platform.config.host, () => {
+    console.log(`知识共建共享平台 http://${platform.config.host}:${platform.config.platformPort}`);
+  });
+  return { habit: habitServer, platform: platformServer };
 }
 
 if (require.main === module) {

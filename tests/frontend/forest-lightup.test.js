@@ -21,11 +21,16 @@ function seedState(overrides = {}) {
   };
 }
 
-// 瞄准是树上节点详情里的「去做」：进入平台、点节点、再点详情里的「去做」，自动落到计时页
-function aim(nodeId = NODE_ID) {
-  document.getElementById("platform-entry").click();
-  document.querySelector(`#platform-feed [data-action='platform-view'][data-node-id='${nodeId}']`).click();
-  document.querySelector("#platform-detail-body [data-action='platform-do']").click();
+// 习惯页没有平台壳，瞄准由平台页的「去做」写进 forest：这里直接写成已瞄准
+function aimedState(nodeId = NODE_ID) {
+  return seedState({
+    forest: {
+      activeTreeId: TREE_ID,
+      selectedNodeId: nodeId,
+      selectedNodeAt: new Date().toISOString(),
+      lightups: []
+    }
+  });
 }
 
 function finishTimer() {
@@ -40,24 +45,14 @@ function submitManualRecord(title, log) {
   );
 }
 
-function openMine() {
-  document.getElementById("platform-entry").click();
-  document.querySelector(".platform-tab[data-platform-tab='mine']").click();
-}
-
-function confirmFirstLightUp() {
-  document.querySelector("#platform-mine [data-action='platform-confirm']").click();
-}
-
 describe("light-up drafts from aimed events", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it("attaches the aimed node to a finished timer and keeps a draft", () => {
-    loadApp({ seedState: seedState() });
+    loadApp({ seedState: aimedState() });
 
-    aim();
     finishTimer();
 
     const state = getState();
@@ -81,9 +76,8 @@ describe("light-up drafts from aimed events", () => {
   });
 
   it("attaches the aimed node to a manual record and clears the aim line", () => {
-    loadApp({ seedState: seedState() });
+    loadApp({ seedState: aimedState() });
 
-    aim();
     submitManualRecord("解三道一元一次方程", "卡在系数化那一步");
 
     const state = getState();
@@ -98,9 +92,8 @@ describe("light-up drafts from aimed events", () => {
   });
 
   it("lets a quick note leave the aim alone and produce no draft", () => {
-    loadApp({ seedState: seedState() });
+    loadApp({ seedState: aimedState() });
 
-    aim();
     document.getElementById("timer-single-log").value = "随手记一条，不挂节点";
     document.getElementById("timer-quick-save").click();
 
@@ -125,9 +118,8 @@ describe("light-up drafts from aimed events", () => {
   });
 
   it("clears the aim from #node-aim-clear without leaving a record", () => {
-    loadApp({ seedState: seedState() });
+    loadApp({ seedState: aimedState() });
 
-    aim();
     expect(getState().forest.selectedNodeId).toBe(NODE_ID);
 
     document.getElementById("node-aim-clear").click();
@@ -323,90 +315,9 @@ describe("light-up drafts from aimed events", () => {
   });
 });
 
-describe("confirm and delete local light-ups", () => {
+describe("cascade-deleting light-up drafts", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  it("confirms a draft from 我的 and flips the badge", () => {
-    loadApp({ seedState: seedState() });
-
-    aim();
-    finishTimer();
-    openMine();
-
-    expect(document.getElementById("platform-mine").textContent).toContain("待发出 · 一元一次方程");
-
-    confirmFirstLightUp();
-
-    const state = getState();
-    expect(state.forest.lightups).toHaveLength(1);
-    expect(state.forest.lightups[0].status).toBe("confirmed");
-    expect(state.forest.lightups[0].confirmedAt).toBeTruthy();
-
-    // 状态词：已发出 > 待发出
-    expect(document.getElementById("platform-mine").textContent).toContain("已发出 · 一元一次方程");
-    expect(document.getElementById("done-list").textContent).toContain("已发出 · 一元一次方程");
-
-    // 概览计数：分子 1，分母从已加载节点索引派生（不硬编码节点数）
-    const rowCount = document.querySelectorAll("#platform-feed .node-row").length;
-    expect(document.getElementById("overview-lit-nodes").textContent).toBe(`1 / ${rowCount}`);
-  });
-
-  it("shows the node's own light-up as a practice record in the detail", () => {
-    loadApp({ seedState: seedState() });
-
-    aim();
-    document.getElementById("timer-single-log").value = "自己讲了一遍移项";
-    finishTimer();
-
-    document.getElementById("platform-entry").click();
-    document.querySelector(`#platform-feed [data-action='platform-view'][data-node-id='${NODE_ID}']`).click();
-
-    const detail = document.getElementById("platform-detail");
-    expect(detail.textContent).toContain("打卡记录");
-    expect(detail.textContent).toContain("自己讲了一遍移项");
-    expect(detail.textContent).toContain("我");
-  });
-
-  it("keeps confirmedAt when the same light-up is confirmed again", () => {
-    loadApp({ seedState: seedState() });
-
-    aim();
-    finishTimer();
-    openMine();
-
-    confirmFirstLightUp();
-    const id = getState().forest.lightups[0].id;
-    const firstConfirmedAt = getState().forest.lightups[0].confirmedAt;
-
-    // 已发出的记录不再显示「发出」；直接派发一次确认，验证函数幂等
-    const probe = document.createElement("button");
-    probe.setAttribute("data-action", "platform-confirm");
-    probe.setAttribute("data-id", id);
-    document.getElementById("platform-mine").appendChild(probe);
-    probe.click();
-
-    const state = getState();
-    expect(state.forest.lightups).toHaveLength(1);
-    expect(state.forest.lightups[0].status).toBe("confirmed");
-    expect(state.forest.lightups[0].confirmedAt).toBe(firstConfirmedAt);
-  });
-
-  it("removes a light-up from 我的 without touching the event", () => {
-    loadApp({ seedState: seedState() });
-
-    aim();
-    finishTimer();
-    openMine();
-
-    document.querySelector("#platform-mine [data-action='platform-delete']").click();
-
-    const state = getState();
-    expect(state.forest.lightups).toHaveLength(0);
-    expect(state.events).toHaveLength(1);
-    expect(document.getElementById("platform-mine").textContent).toContain("还没有发出过");
-    expect(document.getElementById("done-list").textContent).toContain("本地记录");
   });
 
   it("cascade-deletes only draft light-ups when their event is deleted", () => {
@@ -475,8 +386,5 @@ describe("confirm and delete local light-ups", () => {
     state = getState();
     expect(state.events).toHaveLength(0);
     expect(state.forest.lightups.map((item) => item.id)).toEqual(["l-confirmed"]);
-
-    openMine();
-    expect(document.getElementById("platform-mine").textContent).toContain("已发出 · 合并同类项");
   });
 });

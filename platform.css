@@ -1,0 +1,399 @@
+/* 知识共建共享平台：一块深色平面，刻意与习惯页的米色纸页区分开。 */
+:root {
+  --plane: #101418;
+  --plane-grid: rgba(255, 255, 255, 0.035);
+  --bar: #151c22;
+  --line-dark: #242e37;
+  --ink: #e6edf3;
+  --ink-muted: #8a99a6;
+  --card: #f4efe6;
+  --card-ink: #241f17;
+  --card-edge: #d9cfbf;
+  --prereq: #d7a15a;
+  --instance: #7eb8c9;
+  --aside: #1a2128;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--plane);
+  background-image:
+    linear-gradient(var(--plane-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--plane-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  color: var(--ink);
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.6;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* 账号门：同一块深色底，不做习惯页的纸面卡片 */
+.account-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.account-card {
+  width: min(420px, 100%);
+  background: var(--aside);
+  border: 1px solid var(--line-dark);
+  border-radius: 4px;
+  padding: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.account-card h1 {
+  margin: 0 0 8px;
+  font-size: 24px;
+}
+
+.account-lead {
+  margin: 0 0 20px;
+  color: var(--ink-muted);
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+input[type="text"],
+input[type="password"],
+textarea,
+input[type="file"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line-dark);
+  border-radius: 4px;
+  background: #101820;
+  color: var(--ink);
+  font: inherit;
+}
+
+input:focus,
+textarea:focus {
+  outline: 1px solid var(--prereq);
+  border-color: var(--prereq);
+}
+
+.primary {
+  border: 1px solid var(--prereq);
+  border-radius: 4px;
+  background: var(--prereq);
+  color: #201607;
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: #e2b06c;
+}
+
+.account-modes {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.account-mode-button,
+.link-button,
+.ghost-button {
+  border: 1px solid var(--line-dark);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-muted);
+  padding: 8px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.account-mode-button.active {
+  border-color: var(--prereq);
+  color: var(--prereq);
+}
+
+.link-button:hover,
+.ghost-button:hover {
+  color: var(--ink);
+  border-color: var(--instance);
+}
+
+.ghost-button.danger:hover {
+  color: #e08686;
+  border-color: #8a4444;
+}
+
+.report {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #8a4444;
+  border-radius: 4px;
+  color: #e0a0a0;
+  background: rgba(138, 68, 68, 0.12);
+}
+
+/* 顶栏：只有标题、回习惯页的链接、退出 */
+.platform-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.platform-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 22px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line-dark);
+}
+
+.platform-title {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+
+.platform-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.platform-link {
+  color: var(--instance);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.platform-link:hover {
+  border-bottom-color: var(--instance);
+}
+
+.platform-stage {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.platform-feed {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 24px;
+}
+
+/* 平面与节点：浅色卡片绝对定位铺在深色平面上 */
+.tree-plane {
+  position: relative;
+}
+
+.tree-legend {
+  position: absolute;
+  top: 12px;
+  left: 20px;
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.tree-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tree-legend-swatch {
+  width: 24px;
+  border-top: 2px solid var(--prereq);
+}
+
+.tree-legend-swatch.instance {
+  border-top-style: dashed;
+  border-top-color: var(--instance);
+}
+
+.tree-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.tree-edge {
+  fill: none;
+  stroke-width: 2;
+}
+
+.tree-edge-prereq {
+  stroke: var(--prereq);
+}
+
+.tree-edge-instance {
+  stroke: var(--instance);
+  stroke-dasharray: 6 5;
+}
+
+.tree-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 168px;
+  height: 72px;
+  padding: 10px 14px;
+  border: 1px solid var(--card-edge);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--card-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-node:hover {
+  background: #fffaf0;
+  border-color: var(--prereq);
+}
+
+.tree-node:focus-visible {
+  outline: 2px solid var(--prereq);
+  outline-offset: 2px;
+}
+
+.node-title {
+  font-weight: 700;
+}
+
+.node-count {
+  font-size: 12px;
+  color: #7a6f5f;
+}
+
+/* 右侧阅读栏 */
+.platform-detail {
+  flex: 0 0 380px;
+  width: 380px;
+  background: var(--aside);
+  border-left: 1px solid var(--line-dark);
+  padding: 20px;
+  overflow: auto;
+}
+
+.platform-detail > .link-button {
+  margin-bottom: 16px;
+}
+
+.detail-body h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.detail-meta {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.detail-block {
+  margin-top: 22px;
+  display: grid;
+  gap: 12px;
+}
+
+.detail-label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+
+.record-list {
+  display: grid;
+  gap: 10px;
+}
+
+.record-item {
+  border: 1px solid var(--line-dark);
+  border-radius: 4px;
+  background: #131b22;
+  padding: 12px 14px;
+}
+
+.record-meta {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.record-text {
+  margin-top: 8px;
+  white-space: pre-wrap;
+}
+
+.record-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.practice-image {
+  display: block;
+  margin-top: 10px;
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+.meta-note {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.tutorial-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tutorial-head h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.tutorial-toggle {
+  margin-left: auto;
+}

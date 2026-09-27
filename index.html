@@ -15,7 +15,7 @@
       <div class="account-card">
         <p class="eyebrow">Knowledge Habit Tracker</p>
         <h1>点亮</h1>
-        <p class="account-lead">注册后，习惯和知识平台都在这个账号里。</p>
+        <p class="account-lead">注册后进入习惯记录。知识平台是另一个服务。</p>
         <form id="account-form" class="form">
           <label class="field">
             <span>名字</span>
@@ -111,7 +111,7 @@
             <div id="node-aim-line" class="aim-line hidden">
               <div class="input-row">
                 <span id="node-aim-label" class="save-status"></span>
-                <button id="node-aim-change" class="icon-button subtle" type="button">换一条</button>
+                <a id="node-aim-change" class="icon-button subtle" href="http://127.0.0.1:3001/">换一条</a>
                 <button id="node-aim-clear" class="icon-button subtle" type="button">清除瞄准</button>
               </div>
               <div id="node-aim-notice" class="report soft-report hidden"></div>
@@ -157,7 +157,7 @@
               <p class="subtitle">
                 一次只做一件事。习惯、事件、计时和备份默认都只运行在本地沙箱里，再把“谁在什么时候做了什么”沉淀成节点。
               </p>
-              <button id="platform-entry" class="icon-button subtle" type="button">知识共建共享平台</button>
+              <a id="platform-entry" class="icon-button subtle" href="http://127.0.0.1:3001/">知识共建共享平台</a>
               <div class="hero-actions">
                 <button id="account-logout" class="icon-button subtle" type="button">退出</button>
               </div>
@@ -181,10 +181,10 @@
               <span class="overview-label">节点候选</span>
               <strong id="overview-node-candidates" class="overview-value">0 个</strong>
             </article>
-            <article class="overview-card" id="overview-platform-entry">
+            <a class="overview-card" id="overview-platform-entry" href="http://127.0.0.1:3001/">
               <span class="overview-label">已点亮节点</span>
               <strong id="overview-lit-nodes" class="overview-value">0 / 0</strong>
-            </article>
+            </a>
           </section>
         </section>
 
@@ -510,21 +510,6 @@
         </section>
       </main>
 
-      <section id="platform-shell" class="platform-shell hidden" aria-label="知识共建共享平台">
-        <header class="platform-header">
-          <button id="platform-back" class="icon-button subtle" type="button">返回</button>
-          <div class="platform-tabs">
-            <button class="platform-tab active" type="button" data-platform-tab="feed">看看</button>
-            <button class="platform-tab" type="button" data-platform-tab="mine">我的</button>
-          </div>
-        </header>
-        <section id="platform-feed" class="platform-feed"></section>
-        <section id="platform-mine" class="platform-mine hidden"></section>
-        <section id="platform-detail" class="platform-detail hidden">
-          <button id="platform-detail-back" class="icon-button subtle" type="button">返回树</button>
-          <div id="platform-detail-body" class="stack-block"></div>
-        </section>
-      </section>
     </div>
 
     <div id="modal-root" class="modal-root hidden" aria-hidden="true">
