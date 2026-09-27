@@ -72,46 +72,13 @@
               <div id="habit-picker-list" class="habit-picker-list"></div>
             </div>
 
-            <div id="node-aim-field" class="timer-predict">
-              <span>瞄准节点</span>
+            <div id="node-aim-line" class="aim-line hidden">
               <div class="input-row">
-                <span id="node-aim-label" class="save-status">未瞄准节点</span>
-                <button id="node-picker-toggle" class="icon-button" type="button" aria-expanded="false">
-                  选择节点
-                </button>
+                <span id="node-aim-label" class="save-status"></span>
+                <button id="node-aim-change" class="icon-button subtle" type="button">换一条</button>
+                <button id="node-aim-clear" class="icon-button subtle" type="button">清除瞄准</button>
               </div>
-            </div>
-
-            <div id="node-picker" class="picker hidden">
-              <div class="picker-header">
-                <div>
-                  <span class="picker-title">瞄准节点</span>
-                  <span class="meta-note">选中后，下一次正式记录会挂上它</span>
-                </div>
-              </div>
-              <label class="picker-search" for="node-picker-search">
-                <span>搜索节点</span>
-                <input id="node-picker-search" type="text" maxlength="40" placeholder="输入节点标题" />
-              </label>
-              <div id="node-picker-list" class="habit-picker-list"></div>
-            </div>
-
-            <div id="node-card" class="panel panel-nested hidden">
-              <div class="panel-header">
-                <div>
-                  <h3 id="node-card-title"></h3>
-                  <p id="node-card-meta" class="meta-note"></p>
-                </div>
-                <button id="node-clear" class="icon-button subtle" type="button">清除瞄准</button>
-              </div>
-              <div id="node-card-notice" class="report hidden"></div>
-              <div class="stack-block">
-                <div class="meta-note">目标</div>
-                <div id="node-card-goal" class="habit-log"></div>
-                <div class="meta-note">自证提示</div>
-                <div id="node-card-verify" class="habit-log"></div>
-                <div id="node-card-tutorials" class="stack-block"></div>
-              </div>
+              <div id="node-aim-notice" class="report soft-report hidden"></div>
             </div>
 
             <div class="detail-grid">
@@ -154,6 +121,7 @@
               <p class="subtitle">
                 一次只做一件事。习惯、事件、计时和备份默认都只运行在本地沙箱里，再把“谁在什么时候做了什么”沉淀成节点。
               </p>
+              <button id="platform-entry" class="icon-button subtle" type="button">知识共建共享平台</button>
             </div>
           </header>
 
@@ -174,7 +142,7 @@
               <span class="overview-label">节点候选</span>
               <strong id="overview-node-candidates" class="overview-value">0 个</strong>
             </article>
-            <article class="overview-card">
+            <article class="overview-card" id="overview-platform-entry">
               <span class="overview-label">已点亮节点</span>
               <strong id="overview-lit-nodes" class="overview-value">0 / 0</strong>
             </article>
@@ -277,12 +245,6 @@
                   placeholder="例如：背景、结果、阻塞点、后续动作"
                 ></textarea>
               </label>
-              <label class="field" id="done-node-field">
-                <span>挂靠节点</span>
-                <select id="done-node-select">
-                  <option value="">不挂节点</option>
-                </select>
-              </label>
               <button class="primary" type="submit">记录完成</button>
             </form>
 
@@ -302,7 +264,6 @@
               <button class="record-tab" type="button" data-record-tab-target="quick-notes">随手记</button>
               <button class="record-tab" type="button" data-record-tab-target="habits">习惯查看</button>
               <button class="record-tab" type="button" data-record-tab-target="periods">日周月</button>
-              <button id="lightup-tab" class="record-tab" type="button" data-record-tab-target="lightups">点亮</button>
             </div>
 
             <section class="record-section" data-record-tab="events">
@@ -413,30 +374,6 @@
                 </div>
               </div>
             </section>
-
-            <section class="record-section hidden" data-record-tab="lightups">
-              <div class="two-column">
-                <div class="panel panel-nested">
-                  <div class="panel-header">
-                    <div>
-                      <h2>节点点亮状态</h2>
-                      <p>● 是已确认点亮，○ 是还没点亮。这里只反映本地种子树上的进度。</p>
-                    </div>
-                  </div>
-                  <div id="forest-node-list" class="done-list"></div>
-                </div>
-
-                <div class="panel panel-nested">
-                  <div class="panel-header">
-                    <div>
-                      <h2>点亮记录</h2>
-                      <p>草稿排在最前。确认是自证：一次点击，不打分、不判题。</p>
-                    </div>
-                  </div>
-                  <div id="lightup-list" class="done-list"></div>
-                </div>
-              </div>
-            </section>
           </div>
 
           <div class="panel">
@@ -533,6 +470,23 @@
           </div>
         </section>
       </main>
+
+      <section id="platform-shell" class="platform-shell hidden" aria-label="知识共建共享平台">
+        <header class="platform-header">
+          <button id="platform-back" class="icon-button subtle" type="button">返回</button>
+          <div class="platform-tabs">
+            <button class="platform-tab active" type="button" data-platform-tab="feed">看看</button>
+            <button class="platform-tab" type="button" data-platform-tab="mine">我的</button>
+          </div>
+        </header>
+        <p class="meta-note">卡片是一条条短目标，点进去才读方法。发出是你自己的说法，默认只留在这台设备上。</p>
+        <section id="platform-feed" class="platform-feed"></section>
+        <section id="platform-mine" class="platform-mine hidden"></section>
+        <section id="platform-detail" class="platform-detail hidden">
+          <button id="platform-detail-back" class="icon-button subtle" type="button">返回卡片</button>
+          <div id="platform-detail-body" class="stack-block"></div>
+        </section>
+      </section>
     </div>
 
     <div id="modal-root" class="modal-root hidden" aria-hidden="true">

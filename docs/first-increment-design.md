@@ -418,7 +418,7 @@ function resolveEventLightUpBadge(event) {
 
 **不加（含理由）：**
 
-- **不加第 5 个导航页。** 导航是"四页"心智模型（`index.html:15-20`），树浏览放在使用现场（计时页选节点）与记录现场（点亮页签）更贴用途；新增顶层页面要动 `setActivePage()`（`app.js:958`）与 `renderBugList`/`loadRemoteBugs` 的页触发逻辑（`app.js:958-969`）。
+- **日常导航不加第 5 颗按钮。** 知识共建共享平台是独立内容页，不是"第五个日常页"：它承载"看内容、发出自己的说法"，和计时、记录不是同一种注意力。日常导航保持四颗按钮（timer / overview / habit / bug），平台由概览页头的文字按钮和「已点亮节点」卡片进入；`enterPlatform()` 藏起日常导航与四个 page、显示 `#platform-shell`，`leavePlatform()` 回到进入前那一页。平台首页是一列短卡片（一个节点一张），点进卡片详情才展开方法（方法默认只显示标题，展开只存在内存里、不写 state）。因此不需要新增导航按钮，也就不必动 `setActivePage()` 的页切换逻辑。
 - **不上 React / 任何构建链。** 理由是可验证的，不是偏好：(1) `app.js` 是裸 IIFE、无导出，测试通过 `require("app.js")` 直接求值并依赖 `index.html` 的真实 DOM（`tests/frontend/habit-event.test.js:4-34`）——上框架即等于重写测试 harness；(2) 引入打包器会把 `npm start`（`node server.js` 直出静态文件）变成"先构建再服务"，`file://` 离线直开（本产品一期的核心承诺）将不再成立；(3) 本刀净增约 250–400 行 IIFE 代码、约 15 个函数、~12 个 DOM 元素，`getElementById` + `innerHTML` 完全够用。**触发重估的条件写清楚**：当出现"跨页共享的复杂列表状态"或 `app.js` 超过 ~3000 行且单元测试开始需要拆文件时，再单独立项讨论模块化（先做 IIFE → 多 IIFE 文件 + `<script>`，仍不需要打包器）。
 - **不加树可视化图**（见 §3.2）。
 - **不加节点编辑/新建**（见 §3.2）。

@@ -7,8 +7,8 @@
   const STATE_VERSION = 3;
   const AIM_TTL_MS = 8 * 60 * 60 * 1000;
   const AIM_NOTICE_TEXT = {
-    expired: "上次的瞄准已过期，请重新选择节点",
-    dangling: "上次瞄准的节点已不存在，已清除瞄准"
+    expired: "上次对着的那条已经过期",
+    dangling: "上次那条已经不在了"
   };
 
   const defaultState = {
@@ -52,6 +52,11 @@
   // 一次性提示（'expired' | 'dangling' | null）：模块级，不进 state、不参与导出
   let lastAimNotice = null;
   const expandedTutorialIds = new Set();
+  // 平台页是独立内容页：进入时记住来源页，离开时还原；平台内当前分词与详情节点只存在内存里
+  let platformOpen = false;
+  let platformReturnPage = "timer";
+  let platformTab = "feed";
+  let platformDetailNode = null;
 
   // 启动顺序：state → 种子树 → 索引 → 清理失效瞄准（只留提示）→ 首次 render()
   seedTrees = loadSeedTrees();
@@ -62,6 +67,7 @@
 
   const elements = {
     hubToggle: document.getElementById("hub-connected"),
+    nav: document.querySelector(".nav"),
     navButtons: Array.from(document.querySelectorAll(".nav-button")),
     pages: Array.from(document.querySelectorAll(".page")),
     overviewToday: document.getElementById("overview-today"),
@@ -89,15 +95,10 @@
     doneForm: document.getElementById("done-form"),
     doneTitleInput: document.getElementById("done-title"),
     doneLogInput: document.getElementById("done-log"),
-    doneNodeField: document.getElementById("done-node-field"),
-    doneNodeSelect: document.getElementById("done-node-select"),
     recordTabButtons: Array.from(document.querySelectorAll(".record-tab")),
     recordSections: Array.from(document.querySelectorAll(".record-section")),
     doneList: document.getElementById("done-list"),
     quickNoteList: document.getElementById("quick-note-list"),
-    lightupTabButton: document.getElementById("lightup-tab"),
-    forestNodeList: document.getElementById("forest-node-list"),
-    lightupList: document.getElementById("lightup-list"),
     eventSearchInput: document.getElementById("event-search"),
     filterButtons: Array.from(document.querySelectorAll(".filter")),
     battleReport: document.getElementById("battle-report"),
@@ -123,20 +124,21 @@
     habitPickerSearch: document.getElementById("habit-picker-search"),
     habitPickerList: document.getElementById("habit-picker-list"),
     timerHabitLabel: document.getElementById("timer-habit-label"),
-    nodeAimField: document.getElementById("node-aim-field"),
+    nodeAimLine: document.getElementById("node-aim-line"),
     nodeAimLabel: document.getElementById("node-aim-label"),
-    nodePickerToggle: document.getElementById("node-picker-toggle"),
-    nodePicker: document.getElementById("node-picker"),
-    nodePickerSearch: document.getElementById("node-picker-search"),
-    nodePickerList: document.getElementById("node-picker-list"),
-    nodeCard: document.getElementById("node-card"),
-    nodeCardTitle: document.getElementById("node-card-title"),
-    nodeCardMeta: document.getElementById("node-card-meta"),
-    nodeCardGoal: document.getElementById("node-card-goal"),
-    nodeCardVerify: document.getElementById("node-card-verify"),
-    nodeCardTutorials: document.getElementById("node-card-tutorials"),
-    nodeCardNotice: document.getElementById("node-card-notice"),
-    nodeClear: document.getElementById("node-clear"),
+    nodeAimChange: document.getElementById("node-aim-change"),
+    nodeAimClear: document.getElementById("node-aim-clear"),
+    nodeAimNotice: document.getElementById("node-aim-notice"),
+    platformEntry: document.getElementById("platform-entry"),
+    overviewPlatformEntry: document.getElementById("overview-platform-entry"),
+    platformShell: document.getElementById("platform-shell"),
+    platformBack: document.getElementById("platform-back"),
+    platformTabButtons: Array.from(document.querySelectorAll(".platform-tab")),
+    platformFeed: document.getElementById("platform-feed"),
+    platformMine: document.getElementById("platform-mine"),
+    platformDetail: document.getElementById("platform-detail"),
+    platformDetailBack: document.getElementById("platform-detail-back"),
+    platformDetailBody: document.getElementById("platform-detail-body"),
     backupExportButton: document.getElementById("backup-export"),
     backupFileInput: document.getElementById("backup-file"),
     backupStatus: document.getElementById("backup-status"),
@@ -298,28 +300,37 @@
       renderHabitPicker();
     });
 
-    elements.nodePickerToggle.addEventListener("click", () => {
-      const hidden = elements.nodePicker.classList.toggle("hidden");
-      elements.nodePickerToggle.setAttribute("aria-expanded", String(!hidden));
+    elements.nodeAimChange.addEventListener("click", () => {
+      enterPlatform();
     });
 
-    elements.nodePickerSearch.addEventListener("input", () => {
-      renderNodePicker();
-    });
-
-    elements.nodeClear.addEventListener("click", () => {
+    elements.nodeAimClear.addEventListener("click", () => {
       setSelectedNode(null, null);
     });
 
-    elements.doneNodeSelect.addEventListener("change", () => {
-      const nodeId = elements.doneNodeSelect.value;
-      if (!nodeId) {
-        setSelectedNode(null, null);
-        return;
-      }
-      const option = elements.doneNodeSelect.options[elements.doneNodeSelect.selectedIndex];
-      setSelectedNode(option ? option.dataset.treeId : null, nodeId);
+    elements.platformEntry.addEventListener("click", () => {
+      enterPlatform();
     });
+
+    elements.overviewPlatformEntry.addEventListener("click", () => {
+      enterPlatform();
+    });
+
+    elements.platformBack.addEventListener("click", () => {
+      leavePlatform();
+    });
+
+    elements.platformDetailBack.addEventListener("click", () => {
+      closePlatformDetail();
+    });
+
+    elements.platformTabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        setPlatformTab(button.dataset.platformTab || "feed");
+      });
+    });
+
+    elements.platformShell.addEventListener("click", handlePlatformActions);
 
     elements.timerSingleLogInput.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -331,7 +342,6 @@
     elements.doneList.addEventListener("click", handleRecordActions);
     elements.quickNoteList.addEventListener("click", handleRecordActions);
     elements.habitHistoryList.addEventListener("click", handleRecordActions);
-    elements.lightupList.addEventListener("click", handleRecordActions);
 
     elements.backupExportButton.addEventListener("click", () => {
       exportBackup();
@@ -415,15 +425,6 @@
         rebuildLightUpIndex();
         saveState();
         render();
-      }
-      return;
-    }
-
-    if (source === "lightup") {
-      if (action === "confirm") {
-        confirmLightUp(id);
-      } else if (action === "delete") {
-        deleteLightUp(id);
       }
       return;
     }
@@ -694,14 +695,12 @@
     renderHabitHistory();
     renderDoneList();
     renderQuickNoteList();
-    renderForestNodeList();
-    renderLightUpList();
+    renderPlatform();
     renderNodeCandidates();
     renderHabitEventGroups();
     renderPeriodViews();
     renderRecordTabs();
     renderTimer();
-    renderNodeControls();
     renderHabitReminder();
     renderBugList(currentBugList);
     renderBackupStatus();
@@ -832,65 +831,135 @@
       .join("");
   }
 
-  // 种子树缺失时森林功能区整体隐藏，点亮页签也没什么可看的
-  function renderForestNodeList() {
-    const available = nodeIndex.size > 0;
-    elements.lightupTabButton.classList.toggle("hidden", !available);
-    if (!available) {
-      elements.forestNodeList.innerHTML = "";
+  // 一张卡片一个节点：只放目标标题、第一份方法名、建议分钟和两个动作，教程正文不进卡片
+  function renderPlatformFeed() {
+    if (nodeIndex.size === 0) {
+      elements.platformFeed.innerHTML = createEmptyCard("还没有可浏览的内容。");
       return;
     }
-    const litNodeIds = new Set(
-      state.forest.lightups
-        .filter((lightUp) => lightUp.status === "confirmed")
-        .map((lightUp) => lightUp.nodeId)
-    );
-    elements.forestNodeList.innerHTML = listNodes()
-      .map(({ node }) => {
-        const marker = litNodeIds.has(node.id) ? "● 已点亮" : "○ 未点亮";
+    elements.platformFeed.innerHTML = listNodes()
+      .map(({ treeId, node }) => {
+        const tutorials = getTutorialsForNode(treeId, node.id);
+        const methodText = tutorials.length ? tutorials[0].title : "还没有方法";
         const minutes = Number(node.estMinutes) > 0 ? ` · 建议 ${node.estMinutes} 分钟` : "";
         return `
-          <article class="done-item">
-            <h4>${escapeHtml(nodeTitle(node))}</h4>
-            <div class="done-meta">${marker}${minutes}</div>
+          <article class="platform-card">
+            <h3>${escapeHtml(nodeTitle(node))}</h3>
+            <div class="done-meta">${escapeHtml(methodText)}${minutes}</div>
+            <div class="item-actions">
+              <button class="action-button" type="button" data-action="platform-view" data-tree-id="${escapeAttribute(treeId)}" data-node-id="${escapeAttribute(node.id)}">看看</button>
+              <button class="action-button" type="button" data-action="platform-do" data-tree-id="${escapeAttribute(treeId)}" data-node-id="${escapeAttribute(node.id)}">去做</button>
+            </div>
           </article>
         `;
       })
       .join("");
   }
 
-  function renderLightUpList() {
+  function renderPlatformMine() {
     if (nodeIndex.size === 0) {
-      elements.lightupList.innerHTML = "";
+      elements.platformMine.innerHTML = "";
       return;
     }
     if (!state.forest.lightups.length) {
-      elements.lightupList.innerHTML = createEmptyCard("还没有点亮记录。完成一次挂节点的记录后，这里会出现草稿。");
+      elements.platformMine.innerHTML = createEmptyCard("还没有发出过。完成一次挂节点的记录后，这里会出现待发出的说法。");
       return;
     }
-    // 草稿排最前：它们还等着一次确认；sort 稳定，同状态内保持原有顺序
+    // 待发出排最前：它们还等着一次「发出」；sort 稳定，同状态内保持原有顺序
     const ordered = state.forest.lightups
       .slice()
       .sort((a, b) => (a.status === b.status ? 0 : a.status === "draft" ? -1 : 1));
-    elements.lightupList.innerHTML = ordered
-      .map((lightUp) => {
-        const badge = `${lightUp.status === "confirmed" ? "已点亮" : "点亮草稿"} · ${resolveNodeTitle(lightUp.treeId, lightUp.nodeId)}`;
-        const detail = lightUp.evidence && lightUp.evidence.detail
-          ? `<div class="habit-log">${escapeHtml(lightUp.evidence.detail)}</div>`
-          : "";
-        return `
-          <article class="done-item">
-            <h4>${escapeHtml(badge)}</h4>
-            <div class="done-meta">${formatDateTime(lightUp.evidence.timestamp)}</div>
-            ${detail}
-            <div class="item-actions">
-              <button class="action-button" type="button" data-action="confirm" data-source="lightup" data-id="${escapeAttribute(lightUp.id)}">确认点亮</button>
-              <button class="action-button danger" type="button" data-action="delete" data-source="lightup" data-id="${escapeAttribute(lightUp.id)}">删除</button>
-            </div>
-          </article>
-        `;
-      })
-      .join("");
+    elements.platformMine.innerHTML = ordered.map(renderLightUpCard).join("");
+  }
+
+  function renderLightUpCard(lightUp) {
+    const badge = `${lightUp.status === "confirmed" ? "已发出" : "待发出"} · ${resolveNodeTitle(lightUp.treeId, lightUp.nodeId)}`;
+    const detail = lightUp.evidence && lightUp.evidence.detail
+      ? `<div class="habit-log">${escapeHtml(lightUp.evidence.detail)}</div>`
+      : "";
+    const confirmButton = lightUp.status === "confirmed"
+      ? ""
+      : `<button class="action-button" type="button" data-action="platform-confirm" data-id="${escapeAttribute(lightUp.id)}">发出</button>`;
+    return `
+      <article class="done-item">
+        <h4>${escapeHtml(badge)}</h4>
+        <div class="done-meta">${formatDateTime(lightUp.evidence.timestamp)}</div>
+        ${detail}
+        <div class="item-actions">
+          ${confirmButton}
+          <button class="action-button danger" type="button" data-action="platform-delete" data-id="${escapeAttribute(lightUp.id)}">删除</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderPlatformDetail() {
+    if (!platformDetailNode) {
+      elements.platformDetailBody.innerHTML = "";
+      return;
+    }
+    const { treeId, nodeId } = platformDetailNode;
+    const node = getNodeById(treeId, nodeId);
+    if (!node) {
+      elements.platformDetailBody.innerHTML = createEmptyCard("找不到这个节点。");
+      return;
+    }
+    const tutorials = getTutorialsForNode(treeId, nodeId);
+    const tutorialHtml = tutorials.length
+      ? tutorials.map(renderTutorialCard).join("")
+      : `<div class="meta-note">这个节点还没有方法。</div>`;
+    const own = state.forest.lightups.filter(
+      (lightUp) => lightUp.treeId === treeId && lightUp.nodeId === nodeId
+    );
+    const ownHtml = own.length
+      ? own
+          .map((lightUp) => {
+            const detail = lightUp.evidence && lightUp.evidence.detail
+              ? `<div class="habit-log">${escapeHtml(lightUp.evidence.detail)}</div>`
+              : "";
+            const button = lightUp.status === "confirmed"
+              ? ""
+              : `<button class="action-button" type="button" data-action="platform-confirm" data-id="${escapeAttribute(lightUp.id)}">发出</button>`;
+            return `
+              <article class="done-item">
+                <h4>${lightUp.status === "confirmed" ? "已发出" : "待发出"}</h4>
+                ${detail}
+                <div class="item-actions">${button}</div>
+              </article>
+            `;
+          })
+          .join("")
+      : `<div class="meta-note">这个节点上还没有你的说法。</div>`;
+    elements.platformDetailBody.innerHTML = `
+      <h2>${escapeHtml(nodeTitle(node))}</h2>
+      <div class="done-meta">建议 ${node.estMinutes} 分钟</div>
+      <div class="stack-block">
+        <div class="meta-note">目标</div>
+        <div class="habit-log">${escapeHtml(node.goal || "暂无目标说明")}</div>
+        <div class="meta-note">自证提示</div>
+        <div class="habit-log">${escapeHtml(node.verifyHint || "暂无自证提示")}</div>
+      </div>
+      <div class="stack-block">
+        <div class="meta-note">方法</div>
+        ${tutorialHtml}
+      </div>
+      <div class="stack-block">
+        <div class="meta-note">这个节点上自己的说法</div>
+        ${ownHtml}
+      </div>
+    `;
+
+    Array.from(elements.platformDetailBody.querySelectorAll(".tutorial-toggle")).forEach((button) => {
+      button.addEventListener("click", () => {
+        toggleTutorial(button.dataset.tutorialId);
+      });
+    });
+  }
+
+  function renderPlatform() {
+    renderPlatformFeed();
+    renderPlatformMine();
+    renderPlatformDetail();
   }
 
   function renderNodeCandidates() {
@@ -987,6 +1056,7 @@
     } else {
       setRecurringStatus("当前没有激活习惯", false);
     }
+    renderAimLine();
   }
 
   function renderSuggestions(candidates) {
@@ -1099,110 +1169,29 @@
     });
   }
 
-  // 选择器、节点卡、#done-node-select 共用同一个 state.forest.selectedNodeId
-  function renderNodeControls() {
-    const available = nodeIndex.size > 0;
-    elements.nodeAimField.classList.toggle("hidden", !available);
-    elements.doneNodeField.classList.toggle("hidden", !available);
-    if (!available) {
-      elements.nodePicker.classList.add("hidden");
-      elements.nodePickerToggle.setAttribute("aria-expanded", "false");
-      elements.nodeCard.classList.add("hidden");
-    }
-    renderNodePicker();
-    renderNodeCard();
-    renderDoneNodeSelect();
-  }
-
-  function renderNodePicker() {
-    if (nodeIndex.size === 0) {
-      elements.nodePickerList.innerHTML = "";
-      return;
-    }
-    const selectedNodeId = state.forest.selectedNodeId;
-    const keyword = elements.nodePickerSearch.value.trim().toLowerCase();
-    const freeItem = `
-      <button class="node-picker-free${selectedNodeId ? "" : " active"}" type="button" data-node-free="true">
-        不挂节点（自由记录）
-      </button>
-    `;
-    const items = listNodes().filter((item) => {
-      return !keyword || nodeTitle(item.node).toLowerCase().includes(keyword);
-    });
-    elements.nodePickerList.innerHTML =
-      freeItem +
-      items
-        .map(
-          (item) => `
-      <button
-        class="habit-picker-item${item.node.id === selectedNodeId ? " active" : ""}"
-        type="button"
-        data-tree-id="${escapeAttribute(item.treeId)}"
-        data-node-id="${escapeAttribute(item.node.id)}"
-      >
-        ${escapeHtml(`${nodeTitle(item.node)} · 建议 ${item.node.estMinutes} 分钟`)}
-      </button>
-    `
-        )
-        .join("");
-
-    Array.from(elements.nodePickerList.querySelectorAll("button")).forEach((button) => {
-      button.addEventListener("click", () => {
-        if (button.dataset.nodeFree) {
-          setSelectedNode(null, null);
-          return;
-        }
-        setSelectedNode(button.dataset.treeId, button.dataset.nodeId);
-      });
-    });
-  }
-
-  function renderNodeCard() {
+  // 计时页只剩一行瞄准提示：无瞄准（且无失效提示）时整行 hidden
+  function renderAimLine() {
     // 先清理、再消费一次性提示；已清理过时 prune 会早退，不会误伤提示
     pruneStaleAim();
-    if (nodeIndex.size === 0) {
-      elements.nodeCard.classList.add("hidden");
-      return;
-    }
     if (lastAimNotice) {
-      elements.nodeCardNotice.textContent = AIM_NOTICE_TEXT[lastAimNotice];
-      elements.nodeCardNotice.classList.remove("hidden");
+      elements.nodeAimNotice.textContent = AIM_NOTICE_TEXT[lastAimNotice];
+      elements.nodeAimNotice.classList.remove("hidden");
       lastAimNotice = null;
     }
-    const tree = getActiveTree();
-    const treeId = tree ? tree.tree.id : null;
     const node = resolveAimNode();
-    if (!node) {
-      elements.nodeAimLabel.textContent = "未瞄准节点";
-      elements.nodeCardTitle.textContent = "尚未瞄准节点";
-      elements.nodeCardMeta.textContent = "从选择器里挑一个节点，下一次正式记录会挂上它。";
-      elements.nodeCardGoal.textContent = "";
-      elements.nodeCardVerify.textContent = "";
-      elements.nodeCardTutorials.innerHTML = "";
-      elements.nodeClear.classList.add("hidden");
-      // 有失效提示时保留卡片，否则没有瞄准时不必占位
-      elements.nodeCard.classList.toggle("hidden", elements.nodeCardNotice.classList.contains("hidden"));
+    const noticeShown = !elements.nodeAimNotice.classList.contains("hidden");
+    if (!node && !noticeShown) {
+      elements.nodeAimLabel.textContent = "";
+      elements.nodeAimLine.classList.add("hidden");
       return;
     }
-    const prereqs = getPrereqsOfNode(treeId, node.id);
-    const tutorials = getTutorialsForNode(treeId, node.id);
-    const prereqText = prereqs.map((item) => nodeTitle(item)).join("、");
-    elements.nodeAimLabel.textContent = `已瞄准：${nodeTitle(node)}`;
-    elements.nodeCardTitle.textContent = nodeTitle(node);
-    elements.nodeCardMeta.textContent = `建议 ${node.estMinutes} 分钟${prereqText ? ` · 推荐前置：${prereqText}` : ""}`;
-    elements.nodeCardGoal.textContent = node.goal || "暂无目标说明";
-    elements.nodeCardVerify.textContent = node.verifyHint || "暂无自证提示";
-    elements.nodeCardTutorials.innerHTML = tutorials.length
-      ? tutorials.map(renderTutorialCard).join("")
-      : `<div class="meta-note">这个节点还没有教程。</div>`;
-    elements.nodeClear.classList.remove("hidden");
-    elements.nodeCard.classList.remove("hidden");
-
-    Array.from(elements.nodeCardTutorials.querySelectorAll(".tutorial-toggle")).forEach((button) => {
-      button.addEventListener("click", () => {
-        toggleTutorial(button.dataset.tutorialId);
-      });
-    });
+    elements.nodeAimLine.classList.remove("hidden");
+    if (node) {
+      const overMinutes = getElapsedMs() > Number(node.estMinutes) * 60000;
+      elements.nodeAimLabel.textContent = `这次对着：${nodeTitle(node)} · 建议 ${node.estMinutes} 分钟${overMinutes ? " · 已超过建议时长" : ""}`;
+    } else {
+      elements.nodeAimLabel.textContent = "";
+    }
   }
 
   // 默认折叠：展开之前 method 不写进 DOM，折叠才能被断言而不是只做视觉隐藏
@@ -1236,30 +1225,7 @@
     } else {
       expandedTutorialIds.add(tutorialId);
     }
-    renderNodeCard();
-  }
-
-  function renderDoneNodeSelect() {
-    const freeOption = `<option value="">不挂节点</option>`;
-    const items = listNodes();
-    if (!items.length) {
-      elements.doneNodeSelect.innerHTML = freeOption;
-      return;
-    }
-    elements.doneNodeSelect.innerHTML =
-      freeOption +
-      items
-        .map(
-          (item) => `
-      <option value="${escapeAttribute(item.node.id)}" data-tree-id="${escapeAttribute(item.treeId)}">
-        ${escapeHtml(`${nodeTitle(item.node)} · 建议 ${item.node.estMinutes} 分钟`)}
-      </option>
-    `
-        )
-        .join("");
-    const selectedNodeId = state.forest.selectedNodeId;
-    elements.doneNodeSelect.value =
-      selectedNodeId && items.some((item) => item.node.id === selectedNodeId) ? selectedNodeId : "";
+    renderPlatformDetail();
   }
 
   function renderBackupStatus() {
@@ -1300,14 +1266,98 @@
 
   function setActivePage(page) {
     activePage = page;
+    // 平台打开时保持日常 nav 与四个 page 全部隐藏，render() 不能把它们抖出来
     elements.pages.forEach((section) => {
-      section.classList.toggle("hidden", section.dataset.page !== page);
+      section.classList.toggle("hidden", platformOpen || section.dataset.page !== page);
     });
+    elements.nav.classList.toggle("hidden", platformOpen);
     elements.navButtons.forEach((button) => {
       button.classList.toggle("active", button.dataset.pageTarget === page);
     });
-    if (page === "bug") {
+    if (page === "bug" && !platformOpen) {
       void loadRemoteBugs();
+    }
+  }
+
+  // 平台是独立内容页：藏起日常 nav 和四个 page，离开时还原到进入前那一页
+  function enterPlatform() {
+    platformReturnPage = activePage;
+    platformOpen = true;
+    platformDetailNode = null;
+    renderPlatform();
+    resetExpandedTutorials();
+    setPlatformTab("feed");
+    elements.nav.classList.add("hidden");
+    elements.pages.forEach((section) => section.classList.add("hidden"));
+    elements.platformShell.classList.remove("hidden");
+  }
+
+  function leavePlatform() {
+    platformOpen = false;
+    elements.platformShell.classList.add("hidden");
+    setActivePage(platformReturnPage);
+  }
+
+  function setPlatformTab(tab) {
+    platformTab = tab === "mine" ? "mine" : "feed";
+    platformDetailNode = null;
+    elements.platformTabButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.platformTab === platformTab);
+    });
+    elements.platformFeed.classList.toggle("hidden", platformTab !== "feed");
+    elements.platformMine.classList.toggle("hidden", platformTab !== "mine");
+    elements.platformDetail.classList.add("hidden");
+  }
+
+  function openPlatformDetail(treeId, nodeId) {
+    platformDetailNode = { treeId, nodeId };
+    renderPlatformDetail();
+    elements.platformFeed.classList.add("hidden");
+    elements.platformMine.classList.add("hidden");
+    elements.platformDetail.classList.remove("hidden");
+  }
+
+  function closePlatformDetail() {
+    platformDetailNode = null;
+    resetExpandedTutorials();
+    elements.platformDetailBody.innerHTML = "";
+    setPlatformTab("feed");
+  }
+
+  function resetExpandedTutorials() {
+    expandedTutorialIds.clear();
+  }
+
+  // 「去做」：瞄准节点、按需补上预测文字，然后离开平台直达计时页
+  function aimAndGo(treeId, nodeId) {
+    setSelectedNode(treeId, nodeId);
+    if (!elements.timerPredictionInput.value.trim()) {
+      const node = getNodeById(treeId, nodeId);
+      const title = node ? nodeTitle(node) : "";
+      state.timer.predictedAction = title;
+      elements.timerPredictionInput.value = title;
+      saveState();
+      renderTimer();
+    }
+    platformReturnPage = "timer";
+    leavePlatform();
+  }
+
+  function handlePlatformActions(event) {
+    const target = /** @type {HTMLElement} */ (event.target);
+    const button = target.closest("[data-action]");
+    if (!button) {
+      return;
+    }
+    const action = button.dataset.action;
+    if (action === "platform-view") {
+      openPlatformDetail(button.dataset.treeId, button.dataset.nodeId);
+    } else if (action === "platform-do") {
+      aimAndGo(button.dataset.treeId, button.dataset.nodeId);
+    } else if (action === "platform-confirm") {
+      confirmLightUp(button.dataset.id);
+    } else if (action === "platform-delete") {
+      deleteLightUp(button.dataset.id);
     }
   }
 
@@ -1985,17 +2035,6 @@
     return tutorialIndex.get(`${treeId}::${nodeId}`) || [];
   }
 
-  function getPrereqsOfNode(treeId, nodeId) {
-    const tree = seedTrees.find((item) => item.tree.id === treeId);
-    if (!tree || !Array.isArray(tree.edges)) {
-      return [];
-    }
-    return tree.edges
-      .filter((edge) => edge && edge.type === "prereq" && edge.to === nodeId)
-      .map((edge) => getNodeById(treeId, edge.from))
-      .filter(Boolean);
-  }
-
   function resolveNodeTitle(treeId, nodeId) {
     return nodeTitle(getNodeById(treeId, nodeId)) || nodeId;
   }
@@ -2020,10 +2059,10 @@
   function resolveEventLightUpBadge(event) {
     const own = findLightUpByEventId(event.id);
     if (own && own.status === "confirmed") {
-      return `已点亮 · ${resolveNodeTitle(own.treeId, own.nodeId)}`;
+      return `已发出 · ${resolveNodeTitle(own.treeId, own.nodeId)}`;
     }
     if (own) {
-      return `点亮草稿 · ${resolveNodeTitle(own.treeId, own.nodeId)}`;
+      return `待发出 · ${resolveNodeTitle(own.treeId, own.nodeId)}`;
     }
     if (event.lightUp) {
       return "旧标记（未确认）";
@@ -2043,19 +2082,19 @@
         state.forest.activeTreeId = treeId;
       }
     }
-    clearNodeCardNotice();
+    clearAimNotice();
     saveState();
-    // 选节点是高频动作：只重渲染森林控件与计时读数，不跑全量 render()
-    renderNodeControls();
+    // 选节点是高频动作：只重渲染瞄准行与计时读数，不跑全量 render()
+    renderAimLine();
     renderTimer();
   }
 
-  function clearNodeCardNotice() {
-    if (!elements.nodeCardNotice) {
+  function clearAimNotice() {
+    if (!elements.nodeAimNotice) {
       return;
     }
-    elements.nodeCardNotice.textContent = "";
-    elements.nodeCardNotice.classList.add("hidden");
+    elements.nodeAimNotice.textContent = "";
+    elements.nodeAimNotice.classList.add("hidden");
   }
 
   // 纯查询：不写状态、不打日志；UI 只读它的返回值
@@ -2072,7 +2111,7 @@
     return tree ? getNodeById(tree.tree.id, selectedNodeId) : null;
   }
 
-  // 唯一的「清理 + 告知」点：启动后与每次 renderNodeCard() 时调用。
+  // 唯一的「清理 + 告知」点：启动后与每次 renderAimLine() 时调用。
   // 悬空判定独立于 TTL，否则「时间戳很旧的悬空 id」会被当成自然超时静默清掉。
   function pruneStaleAim() {
     const { selectedNodeId, selectedNodeAt } = state.forest;

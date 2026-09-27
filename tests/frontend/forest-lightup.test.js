@@ -21,8 +21,10 @@ function seedState(overrides = {}) {
   };
 }
 
+// 瞄准是平台卡片上的「去做」：进入平台、点卡片、自动落到计时页
 function aim(nodeId = NODE_ID) {
-  document.querySelector(`#node-picker-list [data-node-id='${nodeId}']`).click();
+  document.getElementById("platform-entry").click();
+  document.querySelector(`#platform-feed [data-action='platform-do'][data-node-id='${nodeId}']`).click();
 }
 
 function finishTimer() {
@@ -35,6 +37,15 @@ function submitManualRecord(title, log) {
   document.getElementById("done-form").dispatchEvent(
     new Event("submit", { bubbles: true, cancelable: true })
   );
+}
+
+function openMine() {
+  document.getElementById("platform-entry").click();
+  document.querySelector(".platform-tab[data-platform-tab='mine']").click();
+}
+
+function confirmFirstLightUp() {
+  document.querySelector("#platform-mine [data-action='platform-confirm']").click();
 }
 
 describe("light-up drafts from aimed events", () => {
@@ -65,10 +76,10 @@ describe("light-up drafts from aimed events", () => {
     // 瞄准是一次性的：产出一条草稿后就清空
     expect(state.forest.selectedNodeId).toBeNull();
     expect(state.forest.selectedNodeAt).toBeNull();
-    expect(document.getElementById("done-list").textContent).toContain("点亮草稿 · 一元一次方程");
+    expect(document.getElementById("done-list").textContent).toContain("待发出 · 一元一次方程");
   });
 
-  it("attaches the aimed node to a manual record and resets #done-node-select", () => {
+  it("attaches the aimed node to a manual record and clears the aim line", () => {
     loadApp({ seedState: seedState() });
 
     aim();
@@ -82,7 +93,7 @@ describe("light-up drafts from aimed events", () => {
     expect(state.forest.lightups[0].eventId).toBe(state.events[0].id);
     expect(state.forest.lightups[0].evidence.detail).toBe("卡在系数化那一步");
     expect(state.forest.selectedNodeId).toBeNull();
-    expect(document.getElementById("done-node-select").value).toBe("");
+    expect(document.getElementById("node-aim-line").classList.contains("hidden")).toBe(true);
   });
 
   it("lets a quick note leave the aim alone and produce no draft", () => {
@@ -112,20 +123,19 @@ describe("light-up drafts from aimed events", () => {
     expect(state.forest.lightups).toHaveLength(0);
   });
 
-  it("clears the aim from #node-clear without leaving a record", () => {
+  it("clears the aim from #node-aim-clear without leaving a record", () => {
     loadApp({ seedState: seedState() });
 
     aim();
     expect(getState().forest.selectedNodeId).toBe(NODE_ID);
 
-    document.getElementById("node-clear").click();
+    document.getElementById("node-aim-clear").click();
 
     const state = getState();
     expect(state.forest.selectedNodeId).toBeNull();
     expect(state.forest.selectedNodeAt).toBeNull();
     expect(state.forest.lightups).toHaveLength(0);
-    expect(document.getElementById("done-node-select").value).toBe("");
-    expect(document.querySelector("#node-picker-list .habit-picker-item.active")).toBeNull();
+    expect(document.getElementById("node-aim-line").classList.contains("hidden")).toBe(true);
   });
 
   it("treats an aim older than 8 hours as expired and clears it without warning", () => {
@@ -143,9 +153,9 @@ describe("light-up drafts from aimed events", () => {
       })
     });
 
-    const notice = document.getElementById("node-card-notice");
+    const notice = document.getElementById("node-aim-notice");
     expect(notice.classList.contains("hidden")).toBe(false);
-    expect(notice.textContent).toBe("上次的瞄准已过期，请重新选择节点");
+    expect(notice.textContent).toBe("上次对着的那条已经过期");
     expect(getState().forest.selectedNodeId).toBeNull();
     // 自然超时不打日志，这是刻意的日志契约
     expect(warnSpy).not.toHaveBeenCalled();
@@ -156,7 +166,7 @@ describe("light-up drafts from aimed events", () => {
     expect(state.events[0].nodeId).toBeNull();
     expect(state.forest.lightups).toHaveLength(0);
     expect(warnSpy).not.toHaveBeenCalled();
-    expect(notice.textContent).toBe("上次的瞄准已过期，请重新选择节点");
+    expect(notice.textContent).toBe("上次对着的那条已经过期");
   });
 
   it("clears a dangling aim with one warning and shows the dangling notice", () => {
@@ -177,8 +187,8 @@ describe("light-up drafts from aimed events", () => {
     expect(warnSpy.mock.calls[0][0]).toContain("[forest]");
     expect(warnSpy.mock.calls[0]).toContain("not-a-node");
 
-    const notice = document.getElementById("node-card-notice");
-    expect(notice.textContent).toBe("上次瞄准的节点已不存在，已清除瞄准");
+    const notice = document.getElementById("node-aim-notice");
+    expect(notice.textContent).toBe("上次那条已经不在了");
     expect(getState().forest.selectedNodeId).toBeNull();
 
     finishTimer();
@@ -197,8 +207,8 @@ describe("light-up drafts from aimed events", () => {
       })
     });
 
-    const notice = document.getElementById("node-card-notice");
-    expect(notice.textContent).toBe("上次的瞄准已过期，请重新选择节点");
+    const notice = document.getElementById("node-aim-notice");
+    expect(notice.textContent).toBe("上次对着的那条已经过期");
     expect(getState().forest.selectedNodeId).toBeNull();
     // 节点还在，属于自然超时：不打日志
     expect(warnSpy).not.toHaveBeenCalled();
@@ -228,7 +238,7 @@ describe("light-up drafts from aimed events", () => {
     // 悬空优先于过期：过期也成立时仍按悬空报，并打唯一一条 warn
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0]).toContain("not-a-node");
-    expect(document.getElementById("node-card-notice").textContent).toBe("上次瞄准的节点已不存在，已清除瞄准");
+    expect(document.getElementById("node-aim-notice").textContent).toBe("上次那条已经不在了");
     expect(getState().forest.selectedNodeId).toBeNull();
   });
 
@@ -303,7 +313,8 @@ describe("light-up drafts from aimed events", () => {
 
     const doneText = document.getElementById("done-list").textContent;
     expect(doneText).toContain("旧标记（未确认）");
-    expect(doneText).toContain("点亮草稿 · 一元一次方程");
+    expect(doneText).toContain("待发出 · 一元一次方程");
+    // 找不到点亮的事件不硬写状态词
     expect(doneText).toContain("本地记录");
 
     document.querySelector("[data-record-tab-target='quick-notes']").click();
@@ -316,22 +327,14 @@ describe("confirm and delete local light-ups", () => {
     vi.restoreAllMocks();
   });
 
-  function openLightupTab() {
-    document.querySelector("[data-record-tab-target='lightups']").click();
-  }
-
-  function confirmFirstLightUp() {
-    document.querySelector("#lightup-list [data-action='confirm']").click();
-  }
-
-  it("confirms a draft from the lightups tab and flips the badge", () => {
+  it("confirms a draft from 我的 and flips the badge", () => {
     loadApp({ seedState: seedState() });
 
     aim();
     finishTimer();
-    openLightupTab();
+    openMine();
 
-    expect(document.getElementById("lightup-list").textContent).toContain("点亮草稿 · 一元一次方程");
+    expect(document.getElementById("platform-mine").textContent).toContain("待发出 · 一元一次方程");
 
     confirmFirstLightUp();
 
@@ -340,15 +343,33 @@ describe("confirm and delete local light-ups", () => {
     expect(state.forest.lightups[0].status).toBe("confirmed");
     expect(state.forest.lightups[0].confirmedAt).toBeTruthy();
 
-    // 徽标按 §4.6.5：已确认 > 草稿
-    expect(document.getElementById("lightup-list").textContent).toContain("已点亮 · 一元一次方程");
-    expect(document.getElementById("done-list").textContent).toContain("已点亮 · 一元一次方程");
+    // 状态词：已发出 > 待发出
+    expect(document.getElementById("platform-mine").textContent).toContain("已发出 · 一元一次方程");
+    expect(document.getElementById("done-list").textContent).toContain("已发出 · 一元一次方程");
 
-    const nodeItems = Array.from(document.querySelectorAll("#forest-node-list .done-item"));
-    const litItem = nodeItems.find((item) => item.textContent.includes("一元一次方程"));
-    expect(litItem.textContent).toContain("●");
     // 概览计数：分子 1，分母从已加载节点索引派生（不硬编码节点数）
-    expect(document.getElementById("overview-lit-nodes").textContent).toBe(`1 / ${nodeItems.length}`);
+    const cardCount = document.querySelectorAll("#platform-feed .platform-card").length;
+    expect(document.getElementById("overview-lit-nodes").textContent).toBe(`1 / ${cardCount}`);
+  });
+
+  it("shows the node's own claim in the detail and confirms it there", () => {
+    loadApp({ seedState: seedState() });
+
+    aim();
+    document.getElementById("timer-single-log").value = "自己讲了一遍移项";
+    finishTimer();
+
+    document.getElementById("platform-entry").click();
+    document.querySelector(`#platform-feed [data-action='platform-view'][data-node-id='${NODE_ID}']`).click();
+
+    const detail = document.getElementById("platform-detail");
+    expect(detail.textContent).toContain("这个节点上自己的说法");
+    expect(detail.textContent).toContain("待发出");
+    expect(detail.textContent).toContain("自己讲了一遍移项");
+
+    detail.querySelector("[data-action='platform-confirm']").click();
+
+    expect(getState().forest.lightups[0].status).toBe("confirmed");
   });
 
   it("keeps confirmedAt when the same light-up is confirmed again", () => {
@@ -356,12 +377,18 @@ describe("confirm and delete local light-ups", () => {
 
     aim();
     finishTimer();
-    openLightupTab();
+    openMine();
 
     confirmFirstLightUp();
+    const id = getState().forest.lightups[0].id;
     const firstConfirmedAt = getState().forest.lightups[0].confirmedAt;
 
-    confirmFirstLightUp();
+    // 已发出的记录不再显示「发出」；直接派发一次确认，验证函数幂等
+    const probe = document.createElement("button");
+    probe.setAttribute("data-action", "platform-confirm");
+    probe.setAttribute("data-id", id);
+    document.getElementById("platform-mine").appendChild(probe);
+    probe.click();
 
     const state = getState();
     expect(state.forest.lightups).toHaveLength(1);
@@ -369,19 +396,19 @@ describe("confirm and delete local light-ups", () => {
     expect(state.forest.lightups[0].confirmedAt).toBe(firstConfirmedAt);
   });
 
-  it("removes a light-up from the tab without touching the event", () => {
+  it("removes a light-up from 我的 without touching the event", () => {
     loadApp({ seedState: seedState() });
 
     aim();
     finishTimer();
-    openLightupTab();
+    openMine();
 
-    document.querySelector("#lightup-list [data-action='delete']").click();
+    document.querySelector("#platform-mine [data-action='platform-delete']").click();
 
     const state = getState();
     expect(state.forest.lightups).toHaveLength(0);
     expect(state.events).toHaveLength(1);
-    expect(document.getElementById("lightup-list").textContent).toContain("还没有点亮记录");
+    expect(document.getElementById("platform-mine").textContent).toContain("还没有发出过");
     expect(document.getElementById("done-list").textContent).toContain("本地记录");
   });
 
@@ -451,6 +478,8 @@ describe("confirm and delete local light-ups", () => {
     state = getState();
     expect(state.events).toHaveLength(0);
     expect(state.forest.lightups.map((item) => item.id)).toEqual(["l-confirmed"]);
-    expect(document.getElementById("lightup-list").textContent).toContain("已点亮 · 合并同类项");
+
+    openMine();
+    expect(document.getElementById("platform-mine").textContent).toContain("已发出 · 合并同类项");
   });
 });
