@@ -11,6 +11,9 @@
     dangling: "上次那条已经不在了"
   };
 
+  // 本地/单文件模式：不连服务端，行为与今天的 localStorage 完全一致
+  const LOCAL_ONLY = globalThis.__KHT_LOCAL_ONLY__ === true;
+
   const defaultState = {
     version: STATE_VERSION,
     habit: null,
@@ -37,7 +40,10 @@
     }
   };
 
-  let state = loadState();
+  let state = null;
+  let appBooted = false;
+  let remoteSyncReady = false;
+  let remoteSaveTimer = null;
   let activeRange = "all";
   let activePage = "timer";
   let activeRecordTab = "events";
@@ -58,12 +64,21 @@
   let platformTab = "feed";
   let platformDetailNode = null;
 
-  // 启动顺序：state → 种子树 → 索引 → 清理失效瞄准（只留提示）→ 首次 render()
-  seedTrees = loadSeedTrees();
-  nodeIndex = buildNodeIndex(seedTrees);
-  tutorialIndex = buildTutorialIndex(seedTrees);
-  rebuildLightUpIndex();
-  pruneStaleAim();
+  function bootApp() {
+    // 启动顺序：state → 种子树 → 索引 → 清理失效瞄准（只留提示）→ 首次 render()
+    seedTrees = loadSeedTrees();
+    nodeIndex = buildNodeIndex(seedTrees);
+    tutorialIndex = buildTutorialIndex(seedTrees);
+    rebuildLightUpIndex();
+    pruneStaleAim();
+    bindEvents();
+    // hub 开关已从 index.html 移除；settings.hubConnected 仅为兼容历史备份保留
+    if (elements.hubToggle) {
+      elements.hubToggle.checked = state.settings.hubConnected;
+    }
+    render();
+    startTimerTicker();
+  }
 
   const elements = {
     hubToggle: document.getElementById("hub-connected"),
@@ -159,14 +174,6 @@
     modalClose: document.getElementById("modal-close"),
     modalCancel: document.getElementById("modal-cancel")
   };
-
-  bindEvents();
-  // hub 开关已从 index.html 移除；settings.hubConnected 仅为兼容历史备份保留
-  if (elements.hubToggle) {
-    elements.hubToggle.checked = state.settings.hubConnected;
-  }
-  render();
-  startTimerTicker();
 
   function bindEvents() {
     if (elements.hubToggle) {
@@ -2314,6 +2321,26 @@
 
   function saveState() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (!LOCAL_ONLY && remoteSyncReady) {
+      scheduleRemoteSave();
+    }
+  }
+
+  function scheduleRemoteSave() {
+    if (remoteSaveTimer) {
+      window.clearTimeout(remoteSaveTimer);
+    }
+    remoteSaveTimer = window.setTimeout(() => {
+      remoteSaveTimer = null;
+      window
+        .fetch("/api/state", {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(state)
+        })
+        .catch(() => {});
+    }, 400);
   }
 
   function getCachedBugs() {
@@ -2474,5 +2501,194 @@
       return error.message;
     }
     return "未知错误";
+  }
+
+  function showApp() {
+    const gate = document.getElementById("account-gate");
+    if (gate) {
+      gate.classList.add("hidden");
+    }
+    const shell = document.querySelector(".app-shell");
+    if (shell) {
+      shell.classList.remove("hidden");
+    }
+  }
+
+  function showGate() {
+    const gate = document.getElementById("account-gate");
+    if (gate) {
+      gate.classList.remove("hidden");
+    }
+    const shell = document.querySelector(".app-shell");
+    if (shell) {
+      shell.classList.add("hidden");
+    }
+  }
+
+  function readJsonResponse(response) {
+    return response.json().catch(() => null);
+  }
+
+  function fallbackToLocal() {
+    state = loadState();
+    showApp();
+    bootApp();
+    appBooted = true;
+  }
+
+  async function enterApp() {
+    let nextState = null;
+    try {
+      const response = await window.fetch("/api/state", { credentials: "same-origin" });
+      if (response.ok) {
+        const data = await readJsonResponse(response);
+        if (data && data.state && typeof data.state === "object") {
+          nextState = normalizeState(data.state);
+        }
+      }
+    } catch {
+      nextState = null;
+    }
+    state = nextState || cloneDefaultState();
+    showApp();
+    if (!appBooted) {
+      bootApp();
+      appBooted = true;
+    } else {
+      rebuildLightUpIndex();
+      pruneStaleAim();
+      render();
+    }
+    // 启动加载本身不写服务端，等用户第一次改动再同步
+    remoteSyncReady = true;
+  }
+
+  function returnToGate() {
+    remoteSyncReady = false;
+    if (remoteSaveTimer) {
+      window.clearTimeout(remoteSaveTimer);
+      remoteSaveTimer = null;
+    }
+    const passwordInput = document.getElementById("account-password");
+    if (passwordInput) {
+      passwordInput.value = "";
+    }
+    showGate();
+  }
+
+  async function resolveInitialSession() {
+    let response;
+    try {
+      response = await window.fetch("/api/me", { credentials: "same-origin" });
+    } catch {
+      fallbackToLocal();
+      return;
+    }
+    if (response.status === 404) {
+      fallbackToLocal();
+      return;
+    }
+    if (!response.ok) {
+      // 401 等：留在门口等用户登录
+      return;
+    }
+    const data = await readJsonResponse(response);
+    if (!data || !data.user) {
+      return;
+    }
+    await enterApp();
+  }
+
+  function setupAccountGate() {
+    const form = document.getElementById("account-form");
+    const gate = document.getElementById("account-gate");
+    if (!gate || !form) {
+      fallbackToLocal();
+      return;
+    }
+    const nameInput = document.getElementById("account-name");
+    const passwordInput = document.getElementById("account-password");
+    const submitButton = document.getElementById("account-submit");
+    const errorBox = document.getElementById("account-error");
+    const registerButton = document.getElementById("account-mode-register");
+    const loginButton = document.getElementById("account-mode-login");
+    const logoutButton = document.getElementById("account-logout");
+    let mode = "register";
+    let busy = false;
+
+    function showError(message) {
+      if (!errorBox) {
+        return;
+      }
+      errorBox.textContent = message || "";
+      errorBox.classList.toggle("hidden", !message);
+    }
+
+    function setMode(next) {
+      mode = next;
+      registerButton.classList.toggle("active", mode === "register");
+      loginButton.classList.toggle("active", mode === "login");
+      passwordInput.setAttribute("autocomplete", mode === "register" ? "new-password" : "current-password");
+      submitButton.textContent = mode === "register" ? "注册并进入" : "登录";
+      showError("");
+    }
+
+    registerButton.addEventListener("click", () => setMode("register"));
+    loginButton.addEventListener("click", () => setMode("login"));
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (busy) {
+        return;
+      }
+      busy = true;
+      submitButton.disabled = true;
+      showError("");
+      try {
+        const response = await window.fetch(mode === "register" ? "/api/register" : "/api/login", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: nameInput.value.trim(), password: passwordInput.value })
+        });
+        const data = await readJsonResponse(response);
+        if (!response.ok || !data || !data.ok || !data.user) {
+          const fallbackMessage = mode === "register" ? "注册失败，请稍后再试。" : "登录失败，请稍后再试。";
+          showError((data && data.message) || fallbackMessage);
+          return;
+        }
+        passwordInput.value = "";
+        await enterApp();
+      } catch {
+        showError("网络连接失败，请稍后再试。");
+      } finally {
+        busy = false;
+        submitButton.disabled = false;
+      }
+    });
+
+    if (logoutButton) {
+      logoutButton.addEventListener("click", async () => {
+        try {
+          await window.fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+        } catch {
+          // 退出请求失败也回到门口；服务端状态不动
+        }
+        returnToGate();
+      });
+    }
+
+    setMode("register");
+    resolveInitialSession();
+  }
+
+  if (LOCAL_ONLY) {
+    state = loadState();
+    showApp();
+    bootApp();
+    appBooted = true;
+  } else {
+    showGate();
+    setupAccountGate();
   }
 })();

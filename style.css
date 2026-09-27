@@ -56,6 +56,70 @@ button {
   padding: 28px 0 48px;
 }
 
+.account-gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.account-card {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 32px 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+}
+
+.account-card .eyebrow {
+  margin: 0;
+}
+
+.account-card h1 {
+  margin: 0;
+  font-size: clamp(30px, 6vw, 42px);
+  line-height: 1.1;
+}
+
+.account-lead {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.account-modes {
+  display: flex;
+  gap: 10px;
+}
+
+.account-mode-button {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.account-mode-button.active {
+  border-color: rgba(33, 111, 102, 0.3);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  font-weight: 700;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(280px, 360px);

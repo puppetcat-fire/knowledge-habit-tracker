@@ -1,8 +1,12 @@
 const express = require("express");
+const nodeCrypto = require("node:crypto");
 const fs = require("fs");
 const path = require("path");
 
 const ROOT_DIR = __dirname;
+const SESSION_COOKIE = "kht_session";
+const SCRYPT_KEYLEN = 64;
+const STATE_VERSION_MAX = 3;
 const PUBLIC_FILES = new Map([
   ["/", "index.html"],
   ["/index.html", "index.html"],
@@ -134,6 +138,147 @@ function createApp(overrides = {}) {
     }
   });
 
+  app.post("/api/register", (req, res) => {
+    const validation = validateCredentials(req.body);
+    if (!validation.ok) {
+      return res.status(400).json({
+        ok: false,
+        code: "VALIDATION_ERROR",
+        message: validation.message
+      });
+    }
+
+    const { name, password } = validation.value;
+    try {
+      const users = readUsers(config);
+      if (users.some((user) => user.name.toLowerCase() === name.toLowerCase())) {
+        return res.status(409).json({
+          ok: false,
+          code: "NAME_TAKEN",
+          message: "这个名字已经被注册了，换一个吧。"
+        });
+      }
+      const record = {
+        id: createUserId(),
+        name,
+        salt: nodeCrypto.randomBytes(16).toString("hex"),
+        hash: ""
+      };
+      record.hash = nodeCrypto.scryptSync(password, record.salt, SCRYPT_KEYLEN).toString("hex");
+      users.push(record);
+      writeJsonFile(config.usersPath, users);
+      const token = createSession(config, record.id);
+      res.setHeader("Set-Cookie", sessionCookie(token));
+      return res.status(201).json({ ok: true, user: { id: record.id, name: record.name } });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
+  app.post("/api/login", (req, res) => {
+    const payload = req.body && typeof req.body === "object" ? req.body : {};
+    const name = typeof payload.name === "string" ? payload.name.trim() : "";
+    const password = typeof payload.password === "string" ? payload.password : "";
+    try {
+      const user = readUsers(config).find((candidate) => candidate.name.toLowerCase() === name.toLowerCase());
+      if (!user || !verifyPassword(password, user)) {
+        return res.status(401).json({
+          ok: false,
+          code: "INVALID_LOGIN",
+          message: "名字或密码不对。"
+        });
+      }
+      const token = createSession(config, user.id);
+      res.setHeader("Set-Cookie", sessionCookie(token));
+      return res.json({ ok: true, user: { id: user.id, name: user.name } });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
+  app.post("/api/logout", (req, res) => {
+    try {
+      const token = parseCookies(req.get("cookie"))[SESSION_COOKIE];
+      if (token) {
+        const sessions = readSessions(config);
+        if (sessions[token]) {
+          delete sessions[token];
+          writeJsonFile(config.sessionsPath, sessions);
+        }
+      }
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+    res.setHeader("Set-Cookie", clearSessionCookie());
+    return res.json({ ok: true });
+  });
+
+  app.get("/api/me", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    return res.json({ ok: true, user: { id: user.id, name: user.name } });
+  });
+
+  app.get("/api/state", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    try {
+      const filePath = stateFilePath(config, user.id);
+      if (!fs.existsSync(filePath)) {
+        return res.json({ ok: true, state: null });
+      }
+      const raw = fs.readFileSync(filePath, "utf8");
+      let parsed = null;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = null;
+      }
+      return res.json({ ok: true, state: parsed });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
+  app.put("/api/state", (req, res) => {
+    const user = authenticate(config, req);
+    if (!user) {
+      return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    }
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return res.status(400).json({
+        ok: false,
+        code: "VALIDATION_ERROR",
+        message: "状态必须是一个对象。"
+      });
+    }
+    if (typeof body.version !== "number" || !Number.isFinite(body.version)) {
+      return res.status(400).json({
+        ok: false,
+        code: "VALIDATION_ERROR",
+        message: "状态缺少合法的 version。"
+      });
+    }
+    if (body.version > STATE_VERSION_MAX) {
+      return res.status(400).json({
+        ok: false,
+        code: "VALIDATION_ERROR",
+        message: "状态来自更新的版本，请升级后再同步。"
+      });
+    }
+    try {
+      writeJsonFile(stateFilePath(config, user.id), body);
+      return res.json({ ok: true });
+    } catch (error) {
+      return handleServerError(res, error);
+    }
+  });
+
   app.use((req, res) => {
     res.status(404).json({
       ok: false,
@@ -166,7 +311,10 @@ function buildConfig(overrides) {
     trustProxy: overrides.trustProxy || process.env.TRUST_PROXY || false,
     dataDir,
     bugLogPath: overrides.bugLogPath || path.join(dataDir, "bug-reports.jsonl"),
-    bodyLimit: overrides.bodyLimit || "256kb",
+    usersPath: overrides.usersPath || path.join(dataDir, "users.json"),
+    sessionsPath: overrides.sessionsPath || path.join(dataDir, "sessions.json"),
+    statesDir: overrides.statesDir || path.join(dataDir, "states"),
+    bodyLimit: overrides.bodyLimit || "1mb",
     allowedOrigins: normalizeOrigins(overrides.allowedOrigins || process.env.ALLOWED_ORIGINS || ""),
     rateLimitEnabled:
       overrides.rateLimitEnabled !== undefined
@@ -208,6 +356,114 @@ function createRateLimiter(windowMs, maxRequests) {
     }
     return next();
   };
+}
+
+function validateCredentials(body) {
+  const payload = body && typeof body === "object" ? body : {};
+  const name = typeof payload.name === "string" ? payload.name.trim() : "";
+  const password = typeof payload.password === "string" ? payload.password : "";
+  if (!/^[\p{L}\p{N}_-]{2,24}$/u.test(name)) {
+    return { ok: false, message: "名字需为 2–24 个字符，只能包含字母、数字、中文、下划线或短横。" };
+  }
+  if (password.length < 8 || password.length > 72) {
+    return { ok: false, message: "密码长度需为 8–72 个字符。" };
+  }
+  return { ok: true, value: { name, password } };
+}
+
+function readJsonFile(filePath, fallback) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJsonFile(filePath, value) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(value), "utf8");
+}
+
+function readUsers(config) {
+  const users = readJsonFile(config.usersPath, []);
+  return Array.isArray(users) ? users : [];
+}
+
+function readSessions(config) {
+  const sessions = readJsonFile(config.sessionsPath, {});
+  return sessions && typeof sessions === "object" && !Array.isArray(sessions) ? sessions : {};
+}
+
+function stateFilePath(config, userId) {
+  return path.join(config.statesDir, `${userId}.json`);
+}
+
+function createUserId() {
+  return nodeCrypto.randomBytes(12).toString("hex");
+}
+
+function createSession(config, userId) {
+  const sessions = readSessions(config);
+  const token = nodeCrypto.randomBytes(32).toString("hex");
+  sessions[token] = { userId, createdAt: new Date().toISOString() };
+  writeJsonFile(config.sessionsPath, sessions);
+  return token;
+}
+
+function authenticate(config, req) {
+  const token = parseCookies(req.get("cookie"))[SESSION_COOKIE];
+  if (!token) {
+    return null;
+  }
+  const session = readSessions(config)[token];
+  if (!session || typeof session.userId !== "string") {
+    return null;
+  }
+  return readUsers(config).find((user) => user.id === session.userId) || null;
+}
+
+function verifyPassword(password, user) {
+  if (!user || typeof user.salt !== "string" || typeof user.hash !== "string") {
+    return false;
+  }
+  const expected = Buffer.from(user.hash, "hex");
+  const actual = nodeCrypto.scryptSync(password, user.salt, SCRYPT_KEYLEN);
+  if (expected.length !== actual.length) {
+    return false;
+  }
+  return nodeCrypto.timingSafeEqual(expected, actual);
+}
+
+function parseCookies(header) {
+  const cookies = {};
+  if (typeof header !== "string" || !header) {
+    return cookies;
+  }
+  header.split(";").forEach((part) => {
+    const separator = part.indexOf("=");
+    if (separator < 0) {
+      return;
+    }
+    const key = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (!key) {
+      return;
+    }
+    try {
+      cookies[key] = decodeURIComponent(value);
+    } catch {
+      cookies[key] = value;
+    }
+  });
+  return cookies;
+}
+
+function sessionCookie(token) {
+  return `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/`;
+}
+
+function clearSessionCookie() {
+  return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
 }
 
 function validateBugPayload(body) {

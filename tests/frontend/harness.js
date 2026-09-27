@@ -45,6 +45,9 @@ function loadApp({ seedState = null, withSeedBundle = true } = {}) {
     delete globalThis.FOREST_SEED_TREES;
   }
 
+  // app.js 在求值时读取该开关；前端测试一律走本地模式，不连服务端
+  globalThis.__KHT_LOCAL_ONLY__ = true;
+
   const appPath = path.join(__dirname, "../../app.js");
   delete require.cache[require.resolve(appPath)];
   require(appPath);

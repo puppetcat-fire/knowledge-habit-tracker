@@ -11,7 +11,43 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <section id="account-gate" class="account-gate" aria-label="账号">
+      <div class="account-card">
+        <p class="eyebrow">Knowledge Habit Tracker</p>
+        <h1>点亮</h1>
+        <p class="account-lead">注册后，习惯和知识平台都在这个账号里。</p>
+        <form id="account-form" class="form">
+          <label class="field">
+            <span>名字</span>
+            <input
+              id="account-name"
+              type="text"
+              maxlength="24"
+              autocomplete="username"
+              placeholder="2–24 个字符"
+            />
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <input
+              id="account-password"
+              type="password"
+              maxlength="72"
+              autocomplete="new-password"
+              placeholder="8–72 个字符"
+            />
+          </label>
+          <button id="account-submit" class="primary" type="submit">注册并进入</button>
+        </form>
+        <div class="account-modes" role="group" aria-label="注册或登录">
+          <button id="account-mode-register" class="account-mode-button active" type="button">注册</button>
+          <button id="account-mode-login" class="account-mode-button" type="button">登录</button>
+        </div>
+        <div id="account-error" class="report hidden" role="alert"></div>
+      </div>
+    </section>
+
+    <div class="app-shell hidden">
       <nav class="nav" aria-label="主导航">
         <button class="nav-button active" type="button" data-page-target="timer">专注计时</button>
         <button class="nav-button" type="button" data-page-target="overview">概览</button>
@@ -122,6 +158,9 @@
                 一次只做一件事。习惯、事件、计时和备份默认都只运行在本地沙箱里，再把“谁在什么时候做了什么”沉淀成节点。
               </p>
               <button id="platform-entry" class="icon-button subtle" type="button">知识共建共享平台</button>
+              <div class="hero-actions">
+                <button id="account-logout" class="icon-button subtle" type="button">退出</button>
+              </div>
             </div>
           </header>
 
