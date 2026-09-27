@@ -30,25 +30,48 @@ describe("the knowledge platform is a separate content page", () => {
     expect(document.querySelectorAll(".nav .nav-button")).toHaveLength(4);
   });
 
-  it("lays the seed nodes out as one indented tree instead of a flat card list", () => {
+  it("lays the seed nodes out as a two-dimensional plane instead of an indented list", () => {
     loadApp();
     enterPlatform();
 
-    const rows = document.querySelectorAll("#platform-feed .node-row");
+    const feed = document.getElementById("platform-feed");
+    expect(feed.querySelector(".tree-plane")).not.toBeNull();
     // 26 是种子数据本身的数量，只允许出现在断言种子数据的用例里
-    expect(rows).toHaveLength(26);
+    expect(document.querySelectorAll("#platform-feed .tree-node")).toHaveLength(26);
 
-    const feedText = document.getElementById("platform-feed").textContent;
+    const feedText = feed.textContent;
     expect(feedText).toContain("自然数");
     expect(feedText).toContain("一元一次方程");
-    // 实例节点挂在原理节点下并标注「例子」
-    expect(feedText).toContain("例子");
     // 每行右侧给出打卡次数
     expect(feedText).toContain("次打卡");
-    // 根节点不缩进，子节点缩进：深度来自 prereq 边
-    expect(rows[0].style.getPropertyValue("--depth")).toBe("0");
-    const childDepth = Array.from(rows).some((row) => Number(row.style.getPropertyValue("--depth")) > 0);
-    expect(childDepth).toBe(true);
+    // 图例标出两类边的方向
+    expect(feedText).toContain("前置 → 后置");
+    expect(feedText).toContain("实例 → 原理");
+
+    // 24 条 prereq 边决定列，3 条 instance-of 边把实例挂在原理右下角
+    expect(document.querySelectorAll("#platform-feed .tree-edge-prereq")).toHaveLength(24);
+    expect(document.querySelectorAll("#platform-feed .tree-edge-instance")).toHaveLength(3);
+
+    const left = (nodeId) => Number.parseFloat(nodeRow(nodeId).style.left);
+    const top = (nodeId) => Number.parseFloat(nodeRow(nodeId).style.top);
+
+    // 前置在左，后置在右
+    expect(left("natural-numbers")).toBeLessThan(left("integers"));
+    // 实例在原理的右下方，节点方块互不重叠
+    expect(top("chase-problem")).toBeGreaterThan(top("linear-equation"));
+    expect(left("chase-problem")).toBeGreaterThan(left("linear-equation"));
+    const boxes = Array.from(document.querySelectorAll("#platform-feed .tree-node")).map((node) => ({
+      x: Number.parseFloat(node.style.left),
+      y: Number.parseFloat(node.style.top)
+    }));
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        const a = boxes[i];
+        const b = boxes[j];
+        const separated = a.x + 140 <= b.x || b.x + 140 <= a.x || a.y + 64 <= b.y || b.y + 64 <= a.y;
+        expect(separated).toBe(true);
+      }
+    }
   });
 
   it("keeps tutorial methods out of the tree and expands them only in the detail", () => {

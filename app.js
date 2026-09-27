@@ -847,7 +847,7 @@
       .join("");
   }
 
-  // 知识平台是一棵树：prereq 边决定缩进，instance-of 的实例挂在原理节点下并标注「例子」
+  // 知识平台是一张二维平面：prereq 决定列与顺序，instance-of 的实例挂在原理右下角
   function renderPlatformFeed() {
     if (nodeIndex.size === 0) {
       elements.platformFeed.innerHTML = createEmptyCard("还没有可浏览的内容。");
@@ -858,71 +858,207 @@
       elements.platformFeed.innerHTML = createEmptyCard("还没有可浏览的内容。");
       return;
     }
-    const layout = buildTreeLayout(tree);
-    elements.platformFeed.innerHTML = `<div class="node-tree">${layout.join("")}</div>`;
+    elements.platformFeed.innerHTML = buildTreeLayout(tree);
   }
 
   function buildTreeLayout(tree) {
+    const NODE_WIDTH = 140;
+    const NODE_HEIGHT = 64;
+    const COLUMN_GAP = 360;
+    const ROW_GAP = 92;
+    const PAD_LEFT = 28;
+    const PAD_TOP = 56;
+    const PLANE_PAD = 28;
+
     const nodes = Array.isArray(tree.nodes) ? tree.nodes : [];
     const edges = Array.isArray(tree.edges) ? tree.edges : [];
     const byId = new Map(nodes.map((node) => [node.id, node]));
-    const parentOf = new Map();
-    const instanceParents = new Map();
+    const prereqEdges = [];
+    const instanceEdges = [];
     edges.forEach((edge) => {
       if (!edge || !byId.has(edge.from) || !byId.has(edge.to)) {
         return;
       }
       if (edge.type === "instance-of") {
-        if (!parentOf.has(edge.from)) {
-          parentOf.set(edge.from, edge.to);
-        }
-        instanceParents.set(edge.from, edge.to);
-      } else if (edge.type === "prereq" && !parentOf.has(edge.to)) {
-        parentOf.set(edge.to, edge.from);
+        instanceEdges.push(edge);
+      } else if (edge.type === "prereq") {
+        prereqEdges.push(edge);
       }
     });
-    const childrenOf = new Map();
-    nodes.forEach((node) => {
-      const parent = parentOf.get(node.id);
-      if (parent === undefined) {
-        return;
-      }
-      childrenOf.set(parent, (childrenOf.get(parent) || []).concat(node.id));
-    });
-    const treeId = tree.tree.id;
-    const rows = [];
-    nodes
-      .filter((node) => !parentOf.has(node.id))
-      .forEach((node) => walkNode(node.id, 0, false));
 
-    function walkNode(nodeId, depth, isInstance) {
-      const node = byId.get(nodeId);
-      if (!node) {
-        return;
+    // 实例节点不进 prereq 的列，只在原理节点右下方单独摆位
+    const instanceIds = new Set(instanceEdges.map((edge) => edge.from));
+    const prereqNodes = nodes.filter((node) => !instanceIds.has(node.id));
+
+    // rank = 1 + 前置 rank 最大值；无前置入边则为 0
+    const rankOf = new Map();
+    function resolveRank(nodeId, visiting) {
+      if (rankOf.has(nodeId)) {
+        return rankOf.get(nodeId);
       }
-      rows.push(renderTreeNode(treeId, node, depth, isInstance));
-      (childrenOf.get(nodeId) || []).forEach((childId) => {
-        walkNode(childId, depth + 1, instanceParents.get(childId) === nodeId);
+      if (visiting.has(nodeId)) {
+        return 0;
+      }
+      visiting.add(nodeId);
+      let rank = 0;
+      prereqEdges.forEach((edge) => {
+        if (edge.to === nodeId) {
+          rank = Math.max(rank, resolveRank(edge.from, visiting) + 1);
+        }
+      });
+      rankOf.set(nodeId, rank);
+      return rank;
+    }
+    prereqNodes.forEach((node) => resolveRank(node.id, new Set()));
+
+    const maxRank = prereqNodes.reduce((max, node) => Math.max(max, rankOf.get(node.id) || 0), 0);
+    const columns = [];
+    for (let rank = 0; rank <= maxRank; rank += 1) {
+      columns[rank] = [];
+    }
+    prereqNodes.forEach((node) => {
+      columns[rankOf.get(node.id) || 0].push(node);
+    });
+
+    // 列从左到右摆放；同列按前置 y 的平均值排序，无前置则保持原始顺序
+    const position = new Map();
+    for (let rank = 0; rank <= maxRank; rank += 1) {
+      const column = columns[rank];
+      if (!column.length) {
+        continue;
+      }
+      const ordered = column
+        .map((node, index) => ({ node, index, key: averagePredecessorY(node.id) }))
+        .sort((a, b) => (a.key === b.key ? a.index - b.index : a.key - b.key));
+      ordered.forEach((entry, row) => {
+        position.set(entry.node.id, {
+          x: PAD_LEFT + rank * COLUMN_GAP,
+          y: PAD_TOP + row * ROW_GAP
+        });
       });
     }
 
-    return rows;
+    function averagePredecessorY(nodeId) {
+      let sum = 0;
+      let count = 0;
+      prereqEdges.forEach((edge) => {
+        if (edge.to !== nodeId) {
+          return;
+        }
+        const from = position.get(edge.from);
+        if (!from) {
+          return;
+        }
+        sum += from.y;
+        count += 1;
+      });
+      return count ? sum / count : 0;
+    }
+
+    // 实例放在原理右下方的空档里，不压住原理，也不占后置那一列
+    const siblingIndex = new Map();
+    instanceEdges.forEach((edge) => {
+      const principle = position.get(edge.to);
+      if (!principle) {
+        return;
+      }
+      const index = siblingIndex.get(edge.to) || 0;
+      siblingIndex.set(edge.to, index + 1);
+      position.set(edge.from, {
+        x: principle.x + NODE_WIDTH + 32,
+        y: principle.y + NODE_HEIGHT + 24 + index * (NODE_HEIGHT + 16)
+      });
+    });
+
+    const placedIds = Array.from(position.keys());
+    for (let pass = 0; pass < 40; pass += 1) {
+      let moved = false;
+      for (let i = 0; i < placedIds.length; i += 1) {
+        for (let j = i + 1; j < placedIds.length; j += 1) {
+          const leftId = placedIds[i];
+          const rightId = placedIds[j];
+          const leftPos = position.get(leftId);
+          const rightPos = position.get(rightId);
+          const gap = 12;
+          const hits = leftPos.x < rightPos.x + NODE_WIDTH + gap
+            && rightPos.x < leftPos.x + NODE_WIDTH + gap
+            && leftPos.y < rightPos.y + NODE_HEIGHT + gap
+            && rightPos.y < leftPos.y + NODE_HEIGHT + gap;
+          if (!hits) {
+            continue;
+          }
+          const lowerId = leftPos.y > rightPos.y ? leftId : rightId;
+          const lowerPos = position.get(lowerId);
+          const upperPos = lowerId === leftId ? rightPos : leftPos;
+          position.set(lowerId, {
+            x: lowerPos.x,
+            y: upperPos.y + NODE_HEIGHT + 16
+          });
+          moved = true;
+        }
+      }
+      if (!moved) {
+        break;
+      }
+    }
+
+    let contentRight = 0;
+    let contentBottom = 0;
+    position.forEach((pos) => {
+      contentRight = Math.max(contentRight, pos.x + NODE_WIDTH);
+      contentBottom = Math.max(contentBottom, pos.y + NODE_HEIGHT);
+    });
+    const planeWidth = contentRight + PLANE_PAD;
+    const planeHeight = contentBottom + PLANE_PAD;
+
+    function buildLine(edge, className) {
+      const from = position.get(edge.from);
+      const to = position.get(edge.to);
+      if (!from || !to) {
+        return "";
+      }
+      const x1 = from.x + NODE_WIDTH / 2;
+      const y1 = from.y + NODE_HEIGHT / 2;
+      const x2 = to.x + NODE_WIDTH / 2;
+      const y2 = to.y + NODE_HEIGHT / 2;
+      return `<line class="tree-edge ${className}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" />`;
+    }
+
+    const lines = prereqEdges
+      .map((edge) => buildLine(edge, "tree-edge-prereq"))
+      .concat(instanceEdges.map((edge) => buildLine(edge, "tree-edge-instance")))
+      .join("");
+    const buttons = nodes
+      .filter((node) => position.has(node.id))
+      .map((node) => renderTreeNode(tree.tree.id, node, position.get(node.id)))
+      .join("");
+
+    return `
+      <div class="tree-plane" style="width: ${planeWidth}px; height: ${planeHeight}px">
+        <div class="tree-legend">
+          <span class="tree-legend-item"><span class="tree-legend-swatch prereq"></span>前置 → 后置</span>
+          <span class="tree-legend-item"><span class="tree-legend-swatch instance"></span>实例 → 原理</span>
+        </div>
+        <svg class="tree-svg" width="${planeWidth}" height="${planeHeight}" aria-hidden="true">
+          ${lines}
+        </svg>
+        ${buttons}
+      </div>
+    `;
   }
 
-  function renderTreeNode(treeId, node, depth, isInstance) {
+  function renderTreeNode(treeId, node, pos) {
     const count = recordsForNode(treeId, node.id).length;
-    const instanceTag = isInstance ? `<span class="node-instance-tag">例子</span>` : "";
     return `
       <button
-        class="node-row"
-        style="--depth: ${depth}"
+        class="tree-node node-row"
+        style="left: ${pos.x}px; top: ${pos.y}px"
         type="button"
         data-action="platform-view"
         data-tree-id="${escapeAttribute(treeId)}"
         data-node-id="${escapeAttribute(node.id)}"
       >
         <span class="node-title">${escapeHtml(nodeTitle(node))}</span>
-        ${instanceTag}
         <span class="node-count">${count} 次打卡</span>
       </button>
     `;

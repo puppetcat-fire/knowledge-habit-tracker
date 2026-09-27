@@ -776,59 +776,95 @@ button {
 
 .platform-feed {
   grid-template-columns: 1fr;
+  overflow-x: auto;
 }
 
-.node-tree {
-  display: grid;
-  gap: 4px;
-  margin-left: 6px;
-  border-left: 2px solid var(--line-strong);
-}
-
-.node-row {
+.tree-plane {
   position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.tree-legend {
+  position: absolute;
+  top: 16px;
+  left: 20px;
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 12px 8px calc(16px + var(--depth, 0) * 22px);
-  border-radius: var(--radius-sm);
-  background: transparent;
+  gap: 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tree-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tree-legend-swatch {
+  width: 22px;
+  border-top: 2px solid var(--primary);
+}
+
+.tree-legend-swatch.instance {
+  border-top-color: var(--warm);
+  border-top-style: dashed;
+}
+
+.tree-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.tree-edge {
+  fill: none;
+  stroke-width: 2;
+}
+
+.tree-edge-prereq {
+  stroke: var(--primary);
+}
+
+.tree-edge-instance {
+  stroke: var(--warm);
+  stroke-dasharray: 5 4;
+}
+
+.tree-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 140px;
+  height: 64px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel-strong);
   color: var(--text);
   text-align: left;
   cursor: pointer;
+  box-shadow: var(--shadow);
 }
 
-.node-row::before {
-  content: "";
-  position: absolute;
-  left: calc(var(--depth, 0) * 22px);
-  top: 50%;
-  width: 12px;
-  border-top: 1px solid var(--line-strong);
+.tree-node:hover {
+  border-color: rgba(33, 111, 102, 0.35);
 }
 
-.node-row:hover {
-  background: var(--primary-soft);
-}
-
-.node-row:focus-visible {
-  background: var(--primary-soft);
+.tree-node:focus-visible {
   outline: 2px solid var(--primary);
-  outline-offset: -2px;
+  outline-offset: 2px;
 }
 
 .node-title {
   font-weight: 700;
 }
 
-.node-instance-tag {
-  color: var(--warm);
-  font-size: 12px;
-}
-
 .node-count {
-  margin-left: auto;
   color: var(--muted);
   font-size: 12px;
 }
