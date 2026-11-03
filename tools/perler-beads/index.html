@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>图片转拼豆图纸 · humansneeds</title>
+<meta name="description" content="上传一张图，在浏览器里直接摊成能照着摆的拼豆图纸；图片不会上传到服务器。">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./perler.css">
+</head>
+<body>
+<p class="back"><a href="/tools/">← 工具列表</a> · <a href="/">humansneeds.com</a></p>
+
+<h1>图片转拼豆图纸</h1>
+<p class="sub">上传图片 → 像素化 → 匹配豆子颜色 → 生成图纸（纯前端，图片不上传）</p>
+
+<div class="box">
+  <div class="row"><label for="gw">网格宽度</label><input type="number" id="gw" value="32" min="8" max="64"></div>
+  <div class="row"><label for="gh">网格高度</label><input type="number" id="gh" value="32" min="8" max="64"></div>
+  <div class="row"><label for="file">图片</label><input type="file" id="file" accept="image/*"></div>
+  <button id="go" type="button">生成图纸</button>
+</div>
+
+<div class="box" id="out" hidden>
+  <div id="grid"></div>
+  <div id="legend"></div>
+  <button id="share" type="button">分享到拼豆社区</button>
+  <div class="hint">每种颜色对应豆子数量，按图例拼豆即可</div>
+</div>
+
+<script src="./perler.js" defer></script>
+</body>
+</html>

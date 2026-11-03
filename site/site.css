@@ -77,6 +77,104 @@ code {
   top: 12px;
 }
 
+/* 侧边栏：大屏上给这个个人站一个固定的导航栏，小屏继续用页头导航。 */
+.site-rail {
+  display: none;
+}
+
+.rail-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+}
+
+.rail-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  color: var(--primary);
+  font-size: 15px;
+}
+
+.rail-dot {
+  color: var(--warm);
+}
+
+.rail-nav {
+  display: grid;
+  gap: 4px;
+}
+
+.rail-nav a {
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.rail-nav a:hover,
+.rail-nav a:focus-visible {
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.rail-foot {
+  display: grid;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.rail-foot a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.rail-foot a:hover,
+.rail-foot a:focus-visible {
+  color: var(--text);
+}
+
+.rail-foot p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (min-width: 1024px) {
+  body {
+    padding-left: 224px;
+  }
+
+  .site-rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 224px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    padding: 30px 20px 24px;
+    border-right: 1px solid var(--line);
+    background: linear-gradient(180deg, var(--panel), var(--bg) 65%);
+    overflow-y: auto;
+  }
+
+  .site-header .site-nav {
+    display: none;
+  }
+}
+
 .site-header {
   position: sticky;
   top: 0;

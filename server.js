@@ -110,6 +110,9 @@ function createApp(overrides = {}) {
     });
   });
 
+  // 工具页放在仓库的 tools/ 里，和代码一起版本化；/tools/ 其余页面仍是服务器上的静态文件。
+  app.use("/tools", express.static(path.join(ROOT_DIR, "tools"), { maxAge: 0, etag: false }));
+
   PUBLIC_FILES.forEach((fileName, route) => {
     app.get(route, (req, res) => {
       // 本地试用期间每次刷新都要看到最新资源，因此所有静态文件都不缓存

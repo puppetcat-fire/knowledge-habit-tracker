@@ -132,6 +132,34 @@ button {
   font-weight: 700;
 }
 
+.account-guest {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+}
+
+.account-guest-button {
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: transparent;
+  color: var(--primary-strong);
+  cursor: pointer;
+}
+
+.account-guest-button:hover,
+.account-guest-button:focus-visible {
+  background: var(--primary-soft);
+}
+
+.account-guest-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .hero-actions {
   display: flex;
   flex-wrap: wrap;

@@ -1,0 +1,126 @@
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px;
+  color: #222;
+  background: #faf8f5;
+  line-height: 1.6;
+}
+
+h1 {
+  font-size: 22px;
+  text-align: center;
+}
+
+.sub {
+  color: #888;
+  text-align: center;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.back {
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+  margin: 0 0 12px;
+}
+
+.back a {
+  color: #6b8f47;
+}
+
+.box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+label {
+  font-size: 14px;
+  min-width: 70px;
+}
+
+input[type="number"] {
+  width: 70px;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+input[type="file"] {
+  font-size: 14px;
+}
+
+button {
+  padding: 10px 20px;
+  font-size: 15px;
+  background: #6b8f47;
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#grid {
+  display: grid;
+  gap: 0;
+  margin: 16px auto;
+  background: #eee;
+  border: 1px solid #ccc;
+}
+
+#grid .cell {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+#legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#legend .item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+#legend .sw {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid #ccc;
+}
+
+.hint {
+  font-size: 12px;
+  color: #999;
+  text-align: center;
+  margin-top: 12px;
+}
+
+@media (max-width: 520px) {
+  body {
+    padding: 14px;
+  }
+
+  label {
+    min-width: 0;
+  }
+}
