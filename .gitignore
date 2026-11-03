@@ -11,6 +11,9 @@ deepseek-optimization-output.txt
 # Runtime data
 data/
 
+# Local npm cache (used when the shared cache is not writable)
+.npm-cache/
+
 # Environment variables
 .env
 .env.local
@@ -38,9 +41,6 @@ Thumbs.db
 
 # Build artifacts
 *.apk
-
-# Package lock
-package-lock.json
 
 # Offline packages and archives
 knowledge-habit-tracker-offline-*/

@@ -1,0 +1,79 @@
+# humansneeds.com 反向代理示例（Nginx）
+#
+# 1. 换成你的证书路径（certbot 默认写在 /etc/letsencrypt/live/<域名>/）
+# 2. Node 只监听 127.0.0.1:3000，公网只开 80/443
+# 3. 改完 nginx -t && systemctl reload nginx
+#
+# 假设同域还部署了 INeedThis（Next.js），在 needs.humansneeds.com 上单独反代。
+
+upstream humansneeds_app {
+    server 127.0.0.1:3000;
+    keepalive 16;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name humansneeds.com www.humansneeds.com;
+
+    # certbot 的 http-01 challenge 需要这行
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://humansneeds.com$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name www.humansneeds.com;
+
+    ssl_certificate     /etc/letsencrypt/live/humansneeds.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/humansneeds.com/privkey.pem;
+
+    return 301 https://humansneeds.com$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name humansneeds.com;
+
+    ssl_certificate     /etc/letsencrypt/live/humansneeds.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/humansneeds.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:humansneeds:10m;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # 记录里允许带最多 4 张 2MB 的图
+    client_max_body_size 10m;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml text/plain;
+    gzip_min_length 1024;
+
+    location / {
+        proxy_pass http://humansneeds_app;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+}
+
+# INeedThis 在隔壁：单独的子域名，单独的数据
+# server {
+#     listen 443 ssl http2;
+#     server_name needs.humansneeds.com;
+#     location / {
+#         proxy_pass http://127.0.0.1:3200;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Forwarded-Proto $scheme;
+#     }
+# }

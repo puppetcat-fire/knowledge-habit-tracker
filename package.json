@@ -1,7 +1,7 @@
 {
   "name": "knowledge-habit-tracker",
   "version": "1.0.0",
-  "description": "A privacy-focused, offline-first habit tracking system designed specifically for knowledge workers and lifelong learners.",
+  "description": "渡鸦大人的个人工具站（humansneeds.com）：习惯记录、知识共建共享、需求图谱。",
   "main": "electron/main.js",
   "scripts": {
     "start": "node server.js",
@@ -20,6 +20,7 @@
     "check": "npm run lint && npm run typecheck && npm test"
   },
   "keywords": [
+    "personal-site",
     "habit-tracking",
     "knowledge-worker",
     "offline-first",
@@ -27,7 +28,7 @@
     "time-management",
     "productivity"
   ],
-  "author": "Your Name",
+  "author": "渡鸦大人 (puppetcat-fire)",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2"
@@ -46,10 +47,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/knowledge-habit-tracker.git"
+    "url": "https://github.com/puppetcat-fire/knowledge-habit-tracker.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/knowledge-habit-tracker/issues"
+    "url": "https://github.com/puppetcat-fire/knowledge-habit-tracker/issues"
   },
-  "homepage": "https://github.com/your-username/knowledge-habit-tracker#readme"
+  "homepage": "https://humansneeds.com",
+  "engines": {
+    "node": ">=20"
+  }
 }

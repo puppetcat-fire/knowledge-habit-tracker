@@ -1,0 +1,24 @@
+[Unit]
+Description=humansneeds.com personal site
+Documentation=https://github.com/puppetcat-fire/knowledge-habit-tracker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=humansneeds
+Group=humansneeds
+WorkingDirectory=/opt/humansneeds
+EnvironmentFile=/etc/humansneeds.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+# 反馈日志、账号和节点都在 DATA_DIR 里；给它一个能写的目录
+ReadWritePaths=/var/lib/humansneeds
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
