@@ -136,13 +136,17 @@ function createApp(overrides = {}) {
 
   app.get("/api/bugs", (req, res) => {
     try {
-      const bugs = readBugReports(config.bugLogPath).map((bug) => ({
-        id: bug.id,
-        title: bug.title,
-        severity: bug.severity,
-        page: bug.page,
-        createdAt: bug.createdAt
-      }));
+      // Feedback is anonymous, so a visitor only gets back the reports sent from their own
+      // address. Listing every report let anyone read other people's titles.
+      const bugs = readBugReports(config.bugLogPath)
+        .filter((bug) => bug.ip === req.ip)
+        .map((bug) => ({
+          id: bug.id,
+          title: bug.title,
+          severity: bug.severity,
+          page: bug.page,
+          createdAt: bug.createdAt
+        }));
       res.json({ ok: true, bugs });
     } catch (error) {
       handleServerError(res, error);

@@ -116,6 +116,20 @@ describe("server", () => {
     expect(createResponse.body.ok).toBe(true);
     expect(createResponse.body.bug.title).toBe("scriptalert(1)/script 本地问题");
 
+    // A report from another address must not be listed back to this one.
+    fs.appendFileSync(
+      path.join(tempDir, "bug-reports.jsonl"),
+      `${JSON.stringify({
+        id: "someone-else",
+        title: "别人的反馈",
+        severity: "low",
+        page: "site",
+        ip: "203.0.113.9",
+        createdAt: new Date().toISOString()
+      })}\n`,
+      "utf8"
+    );
+
     const listResponse = await request(app).get("/api/bugs");
     expect(listResponse.status).toBe(200);
     expect(listResponse.body.bugs).toHaveLength(1);
