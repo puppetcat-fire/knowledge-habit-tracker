@@ -369,6 +369,43 @@ a.tool-card:hover .tool-arrow {
   color: var(--primary);
 }
 
+.mini-tools {
+  margin-top: 34px;
+  padding-top: 26px;
+  border-top: 1px dashed var(--line);
+}
+
+.mini-tools h3 {
+  font-size: 18px;
+  margin-bottom: 14px;
+}
+
+.mini-tools ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mini-tools a {
+  display: inline-block;
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13.5px;
+}
+
+.mini-tools a:hover,
+.mini-tools a:focus-visible {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
 .about {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);

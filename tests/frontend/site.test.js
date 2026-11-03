@@ -35,6 +35,8 @@ describe("the personal site homepage", () => {
     expect(document.querySelector('a[href="/habit/"]')).not.toBeNull();
     expect(document.querySelector('a[href="/platform/"]')).not.toBeNull();
     expect(document.querySelector('a[href="/needs/"]')).not.toBeNull();
+    expect(document.querySelector('a[href="/tools/perler-beads.html"]')).not.toBeNull();
+    expect(document.querySelector('a[href="/tools/todo.html"]')).not.toBeNull();
     expect(document.querySelector('a[href="mailto:xiaoboren0@gmail.com"]')).not.toBeNull();
     expect(document.title).toContain("humansneeds");
   });
