@@ -44,7 +44,8 @@
   let state = null;
   let appBooted = false;
   let remoteSyncReady = false;
-  let remoteSaveTimer = null;
+  let stateSync = null;
+  let currentUser = null;
   let activeRange = "all";
   let activePage = "timer";
   let activeRecordTab = "events";
@@ -2023,27 +2024,18 @@
   }
 
   function saveState() {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      if (!stateSync) window.alert("浏览器空间不足，记录尚未保存，请导出备份并保持页面打开。");
+    }
     if (!LOCAL_ONLY && remoteSyncReady) {
       scheduleRemoteSave();
     }
   }
 
   function scheduleRemoteSave() {
-    if (remoteSaveTimer) {
-      window.clearTimeout(remoteSaveTimer);
-    }
-    remoteSaveTimer = window.setTimeout(() => {
-      remoteSaveTimer = null;
-      window
-        .fetch("/api/state", {
-          method: "PUT",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(state)
-        })
-        .catch(() => {});
-    }, 400);
+    stateSync.queue(state);
   }
 
   function getCachedBugs() {
@@ -2240,19 +2232,10 @@
   }
 
   async function enterApp() {
-    let nextState = null;
-    try {
-      const response = await window.fetch("/api/state", { credentials: "same-origin" });
-      if (response.ok) {
-        const data = await readJsonResponse(response);
-        if (data && data.state && typeof data.state === "object") {
-          nextState = normalizeState(data.state);
-        }
-      }
-    } catch {
-      nextState = null;
-    }
-    state = nextState || cloneDefaultState();
+    remoteSyncReady = false;
+    stateSync = new window.KHTStateSync(currentUser.id);
+    const nextState = await stateSync.load();
+    state = nextState ? normalizeState(nextState) : cloneDefaultState();
     customNodeOverlay = await loadRemoteNodeOverlay();
     showApp();
     if (!appBooted) {
@@ -2267,14 +2250,11 @@
     }
     // 启动加载本身不写服务端，等用户第一次改动再同步
     remoteSyncReady = true;
+    if (stateSync.pending) void stateSync.flush();
   }
 
   function returnToGate() {
     remoteSyncReady = false;
-    if (remoteSaveTimer) {
-      window.clearTimeout(remoteSaveTimer);
-      remoteSaveTimer = null;
-    }
     const passwordInput = document.getElementById("account-password");
     if (passwordInput) {
       passwordInput.value = "";
@@ -2287,11 +2267,17 @@
     try {
       response = await window.fetch("/api/me", { credentials: "same-origin" });
     } catch {
-      fallbackToLocal();
+      if (window.location.protocol === "file:") {
+        fallbackToLocal();
+      } else {
+        const errorBox = document.getElementById("account-error");
+        errorBox.textContent = "本机服务连接中断。请恢复服务后登录，账号记录不会被空白状态覆盖。";
+        errorBox.classList.remove("hidden");
+      }
       return;
     }
     if (response.status === 404) {
-      fallbackToLocal();
+      if (window.location.protocol === "file:") fallbackToLocal();
       return;
     }
     if (!response.ok) {
@@ -2302,7 +2288,12 @@
     if (!data || !data.user) {
       return;
     }
-    await enterApp();
+    currentUser = data.user;
+    try {
+      await enterApp();
+    } catch {
+      showGate();
+    }
   }
 
   function setupAccountGate() {
@@ -2364,9 +2355,10 @@
           return;
         }
         passwordInput.value = "";
+        currentUser = data.user;
         await enterApp();
-      } catch {
-        showError("网络连接失败，请稍后再试。");
+      } catch (error) {
+        showError(error.message || "连接失败，请稍后再试。");
       } finally {
         busy = false;
         submitButton.disabled = false;
@@ -2375,10 +2367,13 @@
 
     if (logoutButton) {
       logoutButton.addEventListener("click", async () => {
+        if (stateSync && !(await stateSync.flush())) return;
         try {
-          await window.fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+          const response = await window.fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+          if (!response.ok) throw new Error("退出失败");
         } catch {
-          // 退出请求失败也回到门口；服务端状态不动
+          if (stateSync) stateSync.show("退出失败，请重试。已保存的记录不受影响。", true);
+          return;
         }
         returnToGate();
       });

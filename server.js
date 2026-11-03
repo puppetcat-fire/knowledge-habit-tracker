@@ -11,6 +11,7 @@ const HABIT_PUBLIC_FILES = new Map([
   ["/", "index.html"],
   ["/index.html", "index.html"],
   ["/app.js", "app.js"],
+  ["/state-sync.js", "state-sync.js"],
   ["/style.css", "style.css"],
   ["/overlay.html", "overlay.html"],
   ["/overlay.js", "overlay.js"],
@@ -21,6 +22,7 @@ const PLATFORM_PUBLIC_FILES = new Map([
   ["/", "platform.html"],
   ["/platform.html", "platform.html"],
   ["/platform.js", "platform.js"],
+  ["/state-sync.js", "state-sync.js"],
   ["/platform.css", "platform.css"],
   ["/seed-trees/seed-trees.js", "seed-trees/seed-trees.js"]
 ]);
@@ -246,18 +248,9 @@ function createApp(overrides = {}) {
       return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
     }
     try {
-      const filePath = stateFilePath(config, user.id);
-      if (!fs.existsSync(filePath)) {
-        return res.json({ ok: true, state: null });
-      }
-      const raw = fs.readFileSync(filePath, "utf8");
-      let parsed = null;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        parsed = null;
-      }
-      return res.json({ ok: true, state: parsed });
+      const state = readAccountState(config, user.id);
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ ok: true, state, revision: stateRevision(state) });
     } catch (error) {
       return handleServerError(res, error);
     }
@@ -291,8 +284,16 @@ function createApp(overrides = {}) {
       });
     }
     try {
+      const current = readAccountState(config, user.id);
+      const expected = req.get("If-Match");
+      if (expected && expected !== stateRevision(current)) {
+        return res.status(409).json({
+          ok: false, code: "STATE_CONFLICT",
+          message: "另一窗口已更新账号记录。请先导出未保存记录，再读取已保存版本。"
+        });
+      }
       writeJsonFile(stateFilePath(config, user.id), body);
-      return res.json({ ok: true });
+      return res.json({ ok: true, revision: stateRevision(body) });
     } catch (error) {
       return handleServerError(res, error);
     }
@@ -617,14 +618,33 @@ function validateCredentials(body) {
 function readJsonFile(filePath, fallback) {
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch {
-    return fallback;
+  } catch (error) {
+    if (error.code === "ENOENT") return fallback;
+    throw error;
   }
 }
 
 function writeJsonFile(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(value), "utf8");
+  const temporary = `${filePath}.${nodeCrypto.randomBytes(8).toString("hex")}.tmp`;
+  try {
+    fs.writeFileSync(temporary, JSON.stringify(value), { encoding: "utf8", flag: "wx" });
+    fs.renameSync(temporary, filePath);
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
+}
+
+function readAccountState(config, userId) {
+  const state = readJsonFile(stateFilePath(config, userId), null);
+  if (state !== null && (typeof state !== "object" || Array.isArray(state))) {
+    throw new Error("账号记录格式损坏，保留原文件并停止写入。");
+  }
+  return state;
+}
+
+function stateRevision(state) {
+  return nodeCrypto.createHash("sha256").update(JSON.stringify(state)).digest("hex");
 }
 
 function readUsers(config) {

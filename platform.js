@@ -43,6 +43,8 @@
   let mergedTrees = [];
   let overlay = { nodes: [], edges: [] };
   let currentUser = LOCAL_ONLY ? { id: "local", name: "我" } : null;
+  let stateSync = null;
+  let handoffBusy = false;
   let nodeIndex = new Map();
   let tutorialIndex = new Map();
   let platformRecords = [];
@@ -1016,7 +1018,7 @@
     }
     lightUp.status = "confirmed";
     lightUp.confirmedAt = new Date().toISOString();
-    void persistForest();
+    void persistForest(id, lightUp);
     renderPlatformDetail();
   }
 
@@ -1026,45 +1028,25 @@
       return;
     }
     state.forest.lightups = remaining;
-    void persistForest();
+    void persistForest(id, null);
     renderPlatformDetail();
   }
 
   // LOCAL_ONLY 写回同一 localStorage 键；否则从服务端取回 state、改 forest 后整份 PUT
-  async function persistForest() {
+  async function persistForest(id, replacement) {
     if (LOCAL_ONLY) {
       saveLocal();
       return;
     }
-    const serverState = (await fetchServerState()) || {};
-    const serverForest = serverState.forest && typeof serverState.forest === "object" ? serverState.forest : {};
-    serverState.forest = { ...serverForest, ...state.forest };
-    if (serverState.version === undefined) {
-      serverState.version = STATE_VERSION;
-    }
-    try {
-      await window.fetch("/api/state", {
-        method: "PUT",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(serverState)
-      });
-    } catch {
-      // 写失败时保留内存状态，等下一次改动再同步
-    }
-  }
-
-  async function fetchServerState() {
-    try {
-      const response = await window.fetch("/api/state", { credentials: "same-origin" });
-      if (!response.ok) {
-        return null;
-      }
-      const data = await readJsonResponse(response);
-      return data && data.state && typeof data.state === "object" ? data.state : null;
-    } catch {
-      return null;
-    }
+    await stateSync.update((raw) => {
+      const serverState = raw || cloneDefaultState();
+      const forest = serverState.forest || normalizeForest(null);
+      const lightups = Array.isArray(forest.lightups) ? forest.lightups : [];
+      // 只修改这一条，不把本页过期的整份 forest 写回。
+      forest.lightups = lightups.flatMap((item) => item.id === id ? (replacement ? [replacement] : []) : [item]);
+      serverState.forest = forest;
+      return serverState;
+    });
   }
 
   function applyAim(treeId, nodeId) {
@@ -1082,43 +1064,38 @@
 
   // 「去做」：瞄准节点、按需补上预测文字，然后交回习惯服务
   async function aimAndGo(treeId, nodeId) {
-    if (!treeId || !nodeId) {
+    if (!treeId || !nodeId || handoffBusy) {
       return;
     }
     applyAim(treeId, nodeId);
     if (LOCAL_ONLY) {
       saveLocal();
     } else {
-      await syncAimToServer();
+      handoffBusy = true;
+      try {
+        if (!(await syncAimToServer())) return;
+      } finally {
+        handoffBusy = false;
+      }
     }
     window.location.assign(HABIT_ORIGIN + "/");
   }
 
   async function syncAimToServer() {
-    const serverState = (await fetchServerState()) || {};
-    const serverForest = serverState.forest && typeof serverState.forest === "object" ? serverState.forest : {};
-    serverState.forest = {
-      ...serverForest,
-      selectedNodeId: state.forest.selectedNodeId,
-      selectedNodeAt: state.forest.selectedNodeAt,
-      activeTreeId: state.forest.activeTreeId
-    };
-    const serverTimer = serverState.timer && typeof serverState.timer === "object" ? serverState.timer : {};
-    serverTimer.predictedAction = state.timer.predictedAction;
-    serverState.timer = serverTimer;
-    if (serverState.version === undefined) {
-      serverState.version = STATE_VERSION;
-    }
-    try {
-      await window.fetch("/api/state", {
-        method: "PUT",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(serverState)
-      });
-    } catch {
-      // 交回失败时也照常离开，用户仍能在习惯页手动对准节点
-    }
+    return stateSync.update((raw) => {
+      const serverState = raw || cloneDefaultState();
+      if (serverState.timer && serverState.timer.running) {
+        throw new Error("你还有一次正在进行的计时，请先结束它，再开始这个节点。");
+      }
+      serverState.forest = {
+        ...(serverState.forest || {}),
+        selectedNodeId: state.forest.selectedNodeId,
+        selectedNodeAt: state.forest.selectedNodeAt,
+        activeTreeId: state.forest.activeTreeId
+      };
+      serverState.timer = { ...(serverState.timer || {}), predictedAction: state.timer.predictedAction };
+      return serverState;
+    });
   }
 
   function loadState() {
@@ -1382,19 +1359,9 @@
   }
 
   async function enterApp() {
-    let nextState = null;
-    try {
-      const response = await window.fetch("/api/state", { credentials: "same-origin" });
-      if (response.ok) {
-        const data = await readJsonResponse(response);
-        if (data && data.state && typeof data.state === "object") {
-          nextState = normalizeState(data.state);
-        }
-      }
-    } catch {
-      nextState = null;
-    }
-    state = nextState || cloneDefaultState();
+    stateSync = new window.KHTStateSync(currentUser.id);
+    const nextState = await stateSync.load();
+    state = nextState ? normalizeState(nextState) : cloneDefaultState();
     showApp();
     if (!platformBooted) {
       await loadOverlay();
@@ -1408,6 +1375,7 @@
       render();
     }
     // 启动加载本身不写服务端，等用户第一次改动再同步
+    if (stateSync.pending) void stateSync.flush();
   }
 
   function returnToGate() {
@@ -1423,11 +1391,17 @@
     try {
       response = await window.fetch("/api/me", { credentials: "same-origin" });
     } catch {
-      fallbackToLocal();
+      if (window.location.protocol === "file:") {
+        fallbackToLocal();
+      } else {
+        const errorBox = document.getElementById("account-error");
+        errorBox.textContent = "本机服务连接中断。请恢复服务后登录，账号记录不会被空白状态覆盖。";
+        errorBox.classList.remove("hidden");
+      }
       return;
     }
     if (response.status === 404) {
-      fallbackToLocal();
+      if (window.location.protocol === "file:") fallbackToLocal();
       return;
     }
     if (!response.ok) {
@@ -1439,7 +1413,11 @@
       return;
     }
     currentUser = data.user;
-    await enterApp();
+    try {
+      await enterApp();
+    } catch {
+      showGate();
+    }
   }
 
   function setupAccountGate() {
@@ -1503,8 +1481,8 @@
         passwordInput.value = "";
         currentUser = data.user;
         await enterApp();
-      } catch {
-        showError("网络连接失败，请稍后再试。");
+      } catch (error) {
+        showError(error.message || "连接失败，请稍后再试。");
       } finally {
         busy = false;
         submitButton.disabled = false;
@@ -1513,10 +1491,13 @@
 
     if (logoutButton) {
       logoutButton.addEventListener("click", async () => {
+        if (stateSync && !(await stateSync.flush())) return;
         try {
-          await window.fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+          const response = await window.fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+          if (!response.ok) throw new Error("退出失败");
         } catch {
-          // 退出请求失败也回到门口；服务端状态不动
+          if (stateSync) stateSync.show("退出失败，请重试。已保存的记录不受影响。", true);
+          return;
         }
         returnToGate();
       });

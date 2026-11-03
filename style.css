@@ -25,6 +25,21 @@
   box-sizing: border-box;
 }
 
+.save-status {
+  padding: 8px 20px;
+  background: var(--panel);
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.save-status.save-problem { color: var(--danger); }
+.save-status button { font-size: inherit; padding: 4px 10px; }
+.save-status [hidden] { display: none; }
+
 html {
   color-scheme: light;
 }

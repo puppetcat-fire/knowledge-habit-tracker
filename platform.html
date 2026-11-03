@@ -8,6 +8,12 @@
     <link rel="stylesheet" href="platform.css" />
   </head>
   <body>
+    <div id="save-status" class="save-status hidden" role="status" aria-live="polite">
+      <span id="save-status-message"></span>
+      <button id="save-retry" type="button" hidden>重试保存</button>
+      <button id="save-export" type="button" hidden>导出未保存记录</button>
+      <button id="save-reload" type="button" hidden>读取已保存版本</button>
+    </div>
     <section id="account-gate" class="account-gate" aria-label="账号">
       <div class="account-card">
         <p class="eyebrow">Knowledge Commons</p>
@@ -64,6 +70,7 @@
     </div>
 
     <script src="seed-trees/seed-trees.js"></script>
+    <script src="state-sync.js"></script>
     <script src="platform.js"></script>
   </body>
 </html>
