@@ -1,36 +1,55 @@
 const express = require("express");
 const nodeCrypto = require("node:crypto");
 const fs = require("fs");
+const http = require("node:http");
 const path = require("path");
 
 const ROOT_DIR = __dirname;
 const SESSION_COOKIE = "kht_session";
 const SCRYPT_KEYLEN = 64;
 const STATE_VERSION_MAX = 3;
+// 站点是一份白名单：首页在 /，习惯记录器在 /habit/，知识平台在 /platform/。
+// 只有下面列出的文件会被发出去，仓库其余内容（文档、data、源码以外的文件）不会变成静态资源。
+const SITE_PUBLIC_FILES = new Map([
+  ["/", "site/index.html"],
+  ["/site.css", "site/site.css"],
+  ["/site.js", "site/site.js"],
+  ["/favicon.svg", "site/favicon.svg"],
+  ["/robots.txt", "site/robots.txt"],
+  ["/sitemap.xml", "site/sitemap.xml"]
+]);
+
 const HABIT_PUBLIC_FILES = new Map([
-  ["/", "index.html"],
-  ["/index.html", "index.html"],
-  ["/app.js", "app.js"],
-  ["/state-sync.js", "state-sync.js"],
-  ["/style.css", "style.css"],
-  ["/overlay.html", "overlay.html"],
-  ["/overlay.js", "overlay.js"],
-  ["/seed-trees/seed-trees.js", "seed-trees/seed-trees.js"]
+  ["/habit/", "index.html"],
+  ["/habit/index.html", "index.html"],
+  ["/habit/app.js", "app.js"],
+  ["/habit/state-sync.js", "state-sync.js"],
+  ["/habit/style.css", "style.css"],
+  ["/habit/overlay.html", "overlay.html"],
+  ["/habit/overlay.js", "overlay.js"],
+  ["/habit/seed-trees/seed-trees.js", "seed-trees/seed-trees.js"]
 ]);
 
 const PLATFORM_PUBLIC_FILES = new Map([
-  ["/", "platform.html"],
-  ["/platform.html", "platform.html"],
-  ["/platform.js", "platform.js"],
-  ["/state-sync.js", "state-sync.js"],
-  ["/platform.css", "platform.css"],
-  ["/seed-trees/seed-trees.js", "seed-trees/seed-trees.js"]
+  ["/platform/", "platform.html"],
+  ["/platform/index.html", "platform.html"],
+  ["/platform/platform.js", "platform.js"],
+  ["/platform/state-sync.js", "state-sync.js"],
+  ["/platform/platform.css", "platform.css"],
+  ["/platform/seed-trees/seed-trees.js", "seed-trees/seed-trees.js"]
 ]);
 
-const SERVICE_NAMES = {
-  habit: "knowledge-habit-tracker",
-  platform: "knowledge-platform"
-};
+const PUBLIC_FILES = new Map([...SITE_PUBLIC_FILES, ...HABIT_PUBLIC_FILES, ...PLATFORM_PUBLIC_FILES]);
+
+const PUBLIC_REDIRECTS = new Map([
+  // 旧地址：习惯记录器曾经直接占着根路径，书签不能断
+  ["/index.html", "/habit/"],
+  ["/habit", "/habit/"],
+  ["/platform", "/platform/"],
+  ["/platform.html", "/platform/"]
+]);
+
+const SERVICE_NAME = "humansneeds-site";
 
 const SEED_NODE_FILE = path.join(ROOT_DIR, "seed-trees", "k9-math.json");
 const CUSTOM_NODE_TREE_ID = "k9-math";
@@ -45,17 +64,23 @@ function createApp(overrides = {}) {
   const app = express();
 
   app.disable("x-powered-by");
+  // /habit 与 /habit/ 是两条不同的路由：前者 301 到后者，避免自跳。
+  app.enable("strict routing");
 
   if (config.trustProxy) {
     app.set("trust proxy", config.trustProxy);
   }
 
   app.use((req, res, next) => {
-    res.setHeader("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'"
+    );
     res.setHeader("Referrer-Policy", "no-referrer");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     next();
   });
 
@@ -79,8 +104,13 @@ function createApp(overrides = {}) {
     });
   }
 
-  const publicFiles = config.surface === "platform" ? PLATFORM_PUBLIC_FILES : HABIT_PUBLIC_FILES;
-  publicFiles.forEach((fileName, route) => {
+  PUBLIC_REDIRECTS.forEach((target, route) => {
+    app.get(route, (req, res) => {
+      res.redirect(301, target);
+    });
+  });
+
+  PUBLIC_FILES.forEach((fileName, route) => {
     app.get(route, (req, res) => {
       // 本地试用期间每次刷新都要看到最新资源，因此所有静态文件都不缓存
       res.setHeader("Cache-Control", "no-store");
@@ -91,11 +121,16 @@ function createApp(overrides = {}) {
   app.get("/health", (req, res) => {
     res.json({
       status: "ok",
-      service: SERVICE_NAMES[config.surface],
+      service: SERVICE_NAME,
       time: new Date().toISOString(),
       host: config.host,
       rateLimitEnabled: config.rateLimitEnabled,
-      allowedOrigins: config.allowedOrigins
+      allowedOrigins: config.allowedOrigins,
+      surfaces: {
+        site: "/",
+        habit: "/habit/",
+        platform: "/platform/"
+      }
     });
   });
 
@@ -189,7 +224,7 @@ function createApp(overrides = {}) {
       users.push(record);
       writeJsonFile(config.usersPath, users);
       const token = createSession(config, record.id);
-      res.setHeader("Set-Cookie", sessionCookie(token));
+      res.setHeader("Set-Cookie", sessionCookie(token, config));
       return res.status(201).json({ ok: true, user: { id: record.id, name: record.name } });
     } catch (error) {
       return handleServerError(res, error);
@@ -210,7 +245,7 @@ function createApp(overrides = {}) {
         });
       }
       const token = createSession(config, user.id);
-      res.setHeader("Set-Cookie", sessionCookie(token));
+      res.setHeader("Set-Cookie", sessionCookie(token, config));
       return res.json({ ok: true, user: { id: user.id, name: user.name } });
     } catch (error) {
       return handleServerError(res, error);
@@ -230,7 +265,7 @@ function createApp(overrides = {}) {
     } catch (error) {
       return handleServerError(res, error);
     }
-    res.setHeader("Set-Cookie", clearSessionCookie());
+    res.setHeader("Set-Cookie", clearSessionCookie(config));
     return res.json({ ok: true });
   });
 
@@ -512,7 +547,18 @@ function createApp(overrides = {}) {
   });
 
   app.use((req, res) => {
-    res.status(404).json({
+    if (req.path.startsWith("/api/") || req.path === "/api") {
+      return res.status(404).json({
+        ok: false,
+        code: "NOT_FOUND",
+        message: `未找到接口 ${req.path}`
+      });
+    }
+    if (req.method === "GET" && req.accepts("html")) {
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(404).type("html").send(renderNotFoundPage(req.path));
+    }
+    return res.status(404).json({
       ok: false,
       code: "NOT_FOUND",
       message: `未找到路径 ${req.path}`
@@ -545,11 +591,12 @@ function createApp(overrides = {}) {
 function buildConfig(overrides) {
   const dataDir = overrides.dataDir || process.env.DATA_DIR || path.join(ROOT_DIR, "data");
   return {
-    surface: overrides.surface === "platform" ? "platform" : "habit",
     port: Number(overrides.port || process.env.PORT || 3000),
-    platformPort: Number(overrides.platformPort || process.env.PLATFORM_PORT || 3001),
+    legacyPlatformPort: Number(overrides.legacyPlatformPort || process.env.LEGACY_PLATFORM_PORT || 0),
     host: overrides.host || process.env.HOST || "127.0.0.1",
     trustProxy: overrides.trustProxy || process.env.TRUST_PROXY || false,
+    cookieSecure:
+      overrides.cookieSecure !== undefined ? Boolean(overrides.cookieSecure) : process.env.COOKIE_SECURE === "true",
     dataDir,
     bugLogPath: overrides.bugLogPath || path.join(dataDir, "bug-reports.jsonl"),
     usersPath: overrides.usersPath || path.join(dataDir, "users.json"),
@@ -917,12 +964,14 @@ function parseCookies(header) {
   return cookies;
 }
 
-function sessionCookie(token) {
-  return `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/`;
+function sessionCookie(token, config = {}) {
+  const secure = config.cookieSecure ? "; Secure" : "";
+  return `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/${secure}`;
 }
 
-function clearSessionCookie() {
-  return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+function clearSessionCookie(config = {}) {
+  const secure = config.cookieSecure ? "; Secure" : "";
+  return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`;
 }
 
 function validateBugPayload(body) {
@@ -967,8 +1016,16 @@ function cleanText(value, maxLength) {
     .slice(0, maxLength);
 }
 
-function normalizeSeverity(value) {
-  if (value === "low" || value === "high") {
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeSeverity(value) {  if (value === "low" || value === "high") {
     return value;
   }
   return "medium";
@@ -1009,16 +1066,51 @@ function createId() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function renderNotFoundPage(requestPath) {
+  const shownPath = escapeHtml(cleanText(requestPath, 120) || "/");
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>没有这个页面 · humansneeds</title>
+    <link rel="stylesheet" href="/site.css" />
+  </head>
+  <body class="not-found-page">
+    <main class="not-found-card">
+      <p class="eyebrow">404</p>
+      <h1>这里还没有东西</h1>
+      <p><code>${shownPath}</code> 不在这个站点里。可能是链接旧了，也可能是我还没做。</p>
+      <div class="not-found-actions">
+        <a class="button primary" href="/">回到首页</a>
+        <a class="button secondary" href="/habit/">去习惯记录器</a>
+      </div>
+    </main>
+  </body>
+</html>`;
+}
+
 function startServer(overrides = {}) {
-  const habit = createApp({ ...overrides, surface: "habit" });
-  const platform = createApp({ ...overrides, surface: "platform" });
-  const habitServer = habit.app.listen(habit.config.port, habit.config.host, () => {
-    console.log(`习惯记录 http://${habit.config.host}:${habit.config.port}`);
+  const { app, config } = createApp(overrides);
+  const server = app.listen(config.port, config.host, () => {
+    console.log(`humansneeds http://${config.host}:${config.port}/`);
+    console.log(`  习惯记录器 /habit/  ·  知识共建共享平台 /platform/`);
   });
-  const platformServer = platform.app.listen(platform.config.platformPort, platform.config.host, () => {
-    console.log(`知识共建共享平台 http://${platform.config.host}:${platform.config.platformPort}`);
-  });
-  return { habit: habitServer, platform: platformServer };
+
+  let legacyPlatformServer = null;
+  if (config.legacyPlatformPort > 0 && config.legacyPlatformPort !== config.port) {
+    // 旧版知识平台单独跑在 3001。保留一个只做跳转的监听，旧书签不会 404。
+    legacyPlatformServer = http
+      .createServer((req, res) => {
+        res.writeHead(302, { Location: "/platform/" });
+        res.end();
+      })
+      .listen(config.legacyPlatformPort, config.host, () => {
+        console.log(`旧知识平台地址 http://${config.host}:${config.legacyPlatformPort}/ → /platform/`);
+      });
+  }
+
+  return { server, legacyPlatformServer };
 }
 
 if (require.main === module) {

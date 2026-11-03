@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>humansneeds · 渡鸦大人的工具站</title>
+    <meta
+      name="description"
+      content="渡鸦大人（puppetcat-fire）的个人工具站：习惯记录、知识共建共享、需求图谱，以及之后做的小工具。"
+    />
+    <meta name="theme-color" content="#f4f0e6" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="humansneeds · 渡鸦大人的工具站" />
+    <meta
+      property="og:description"
+      content="先把一件事做完、记下来，再把做过的事沉淀成可以共享的知识。"
+    />
+    <meta property="og:url" content="https://humansneeds.com/" />
+    <link rel="canonical" href="https://humansneeds.com/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/site.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到内容</a>
+
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="humansneeds 首页">
+        <span class="brand-mark" aria-hidden="true">◐</span>
+        <span class="brand-text">humansneeds<span class="brand-dot">.</span>com</span>
+      </a>
+      <nav class="site-nav" aria-label="主导航">
+        <a href="#tools">工具</a>
+        <a href="#about">关于</a>
+        <a href="#feedback">反馈</a>
+        <a href="https://github.com/puppetcat-fire" rel="me noopener" target="_blank">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <p class="eyebrow">渡鸦大人 / puppetcat-fire</p>
+        <h1>把「人到底需要什么」<br />做成能用的工具。</h1>
+        <p class="lead">
+          这里放我自己做、自己用的东西：先把一件事做完、记下来，再把做过的事沉淀成可以共享的知识；
+          也用最笨的方式，记录人对「需要」的原始表达。
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="/habit/">开始一次记录</a>
+          <a class="button ghost" href="#tools">看全部工具</a>
+        </div>
+        <ul class="principles" aria-label="这个站点的原则">
+          <li>本地优先</li>
+          <li>没有广告</li>
+          <li>数据可导出</li>
+        </ul>
+      </section>
+
+      <section id="tools" class="section">
+        <header class="section-head">
+          <p class="eyebrow">工具</p>
+          <h2>现在能用的</h2>
+          <p class="section-lead">
+            每个都先给自己用。能用、能导出、能自己修，再拿出来。
+          </p>
+        </header>
+
+        <!--
+          加一个新工具：复制下面任意一张 <a class="tool-card">，改 kicker / 标题 / 描述 / href。
+          需要“还没上线”时用 <div class="tool-card is-soon">，别留空链接。
+        -->
+        <div class="tool-grid">
+          <a class="tool-card tool-card-wide" href="/habit/">
+            <span class="tool-kicker">01 · 习惯</span>
+            <h3>点亮 · 习惯记录器</h3>
+            <p>
+              一次只维护一个习惯。计时、事件、点亮和备份都留在本机，随时可以导出 JSON；
+              重复发生的事会浮成知识节点的候选。
+            </p>
+            <span class="tool-tags">
+              <span>本地优先</span>
+              <span>单任务计时</span>
+              <span>可导出</span>
+            </span>
+            <span class="tool-arrow" aria-hidden="true">→</span>
+          </a>
+
+          <a class="tool-card" href="/platform/">
+            <span class="tool-kicker">02 · 知识</span>
+            <h3>知识共建共享平台</h3>
+            <p>
+              节点上挂的是人真正做过的一次。可以对着节点写一段、放一张图，也可以先看看别人怎么做。
+            </p>
+            <span class="tool-tags">
+              <span>INTP 式共建</span>
+              <span>节点</span>
+            </span>
+            <span class="tool-arrow" aria-hidden="true">→</span>
+          </a>
+
+          <a
+            class="tool-card"
+            href="https://needs.humansneeds.com/"
+            rel="noopener"
+            target="_blank"
+          >
+            <span class="tool-kicker">03 · 需要</span>
+            <h3>INeedThis · 需求图谱</h3>
+            <p>
+              匿名写下「我是谁」和「我需要什么」，重复的需要会被聚成公开信号。隔壁站，单独一套数据。
+            </p>
+            <span class="tool-tags">
+              <span>匿名</span>
+              <span>聚类</span>
+            </span>
+            <span class="tool-arrow" aria-hidden="true">↗</span>
+          </a>
+
+          <div class="tool-card is-soon">
+            <span class="tool-kicker">04 · 手作</span>
+            <h3>拼豆图纸</h3>
+            <p>把一张像素图摊成能照着摆的拼豆图纸。还在整理，整理好会挂到这里。</p>
+            <span class="tool-tags">
+              <span>筹备中</span>
+            </span>
+          </div>
+
+          <a class="tool-card tool-card-quiet" href="https://github.com/puppetcat-fire" rel="noopener" target="_blank">
+            <span class="tool-kicker">05 · 实验</span>
+            <h3>更多实验</h3>
+            <p>没搬过来的半成品、插件和研究笔记，都在 GitHub 上。</p>
+            <span class="tool-arrow" aria-hidden="true">↗</span>
+          </a>
+        </div>
+
+        <p class="section-note">
+          每个工具的源码都在
+          <a href="https://github.com/puppetcat-fire" rel="noopener" target="_blank">GitHub</a>
+          上，欢迎自己拿去改。
+        </p>
+      </section>
+
+      <section id="about" class="section about">
+        <div class="about-copy">
+          <p class="eyebrow">关于</p>
+          <h2>为什么是「humansneeds」</h2>
+          <p>
+            我关心的是同一件事的两头：一个人怎样把想做的事做完，以及一群人怎样把做过的事说清楚、传下去。
+            习惯记录解决前者，知识共建和需求图谱解决后者。它们都不该被广告和推荐算法接管。
+          </p>
+          <p>
+            所以我尽量把工具做得慢一点：不催你连续打卡，不替你决定下一步，数据默认留在你自己的机器上。
+          </p>
+        </div>
+        <dl class="about-facts">
+          <div>
+            <dt>做的人</dt>
+            <dd>渡鸦大人（puppetcat-fire）</dd>
+          </div>
+          <div>
+            <dt>在做的事</dt>
+            <dd>知识管理、习惯设计、把想法做成能跑的东西</dd>
+          </div>
+          <div>
+            <dt>技术口味</dt>
+            <dd>原生前端、单文件优先、能离线就离线</dd>
+          </div>
+          <div>
+            <dt>域名</dt>
+            <dd>humansneeds.com</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="feedback" class="section feedback">
+        <div class="feedback-copy">
+          <p class="eyebrow">反馈</p>
+          <h2>用坏了、想法不对，都告诉我</h2>
+          <p>
+            反馈会先尝试写进这个站点的日志。如果服务没开、或者页面是静态打开的，
+            下面会给你一个 GitHub Issue 的入口，内容不会白填。
+          </p>
+          <p class="feedback-status" id="feedback-health" data-state="checking">
+            <span class="dot" aria-hidden="true"></span>
+            <span id="feedback-health-text">正在检查服务状态…</span>
+          </p>
+        </div>
+
+        <form id="feedback-form" class="feedback-form" novalidate>
+          <div class="field-row">
+            <label class="field">
+              <span>类型</span>
+              <select id="feedback-type" name="type">
+                <option value="bug">有问题</option>
+                <option value="idea">想要一个功能</option>
+                <option value="other">其他</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>涉及哪个工具</span>
+              <select id="feedback-page" name="page">
+                <option value="site">这个首页</option>
+                <option value="habit">点亮 · 习惯记录器</option>
+                <option value="platform">知识共建共享平台</option>
+                <option value="needs">INeedThis · 需求图谱</option>
+                <option value="other">其他 / 说不清</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>标题</span>
+            <input
+              id="feedback-title"
+              name="title"
+              type="text"
+              maxlength="100"
+              required
+              placeholder="一句话说清楚"
+            />
+          </label>
+
+          <label class="field">
+            <span>详细一点</span>
+            <textarea
+              id="feedback-description"
+              name="description"
+              rows="5"
+              maxlength="1000"
+              required
+              placeholder="发生了什么、你期望什么、怎么复现"
+            ></textarea>
+          </label>
+
+          <label class="field">
+            <span>联系方式（可选）</span>
+            <input
+              id="feedback-contact"
+              name="contact"
+              type="text"
+              maxlength="100"
+              placeholder="邮箱或 IM，方便我回复"
+            />
+          </label>
+
+          <noscript>
+            <p class="form-hint">
+              这个表单需要 JavaScript 才能直接提交。也可以直接去
+              <a href="https://github.com/puppetcat-fire/knowledge-habit-tracker/issues/new/choose"
+                >GitHub 提 issue</a
+              >。
+            </p>
+          </noscript>
+
+          <div class="feedback-actions">
+            <button id="feedback-submit" class="button primary" type="submit">提交反馈</button>
+            <span class="form-hint">标题和描述是必填的。</span>
+          </div>
+
+          <div id="feedback-result" class="feedback-result" role="status" aria-live="polite" hidden>
+            <p id="feedback-result-text"></p>
+            <div id="feedback-fallback" class="feedback-fallback" hidden>
+              <a
+                id="feedback-issue-link"
+                class="button secondary"
+                href="https://github.com/puppetcat-fire/knowledge-habit-tracker/issues/new"
+                rel="noopener"
+                target="_blank"
+                >在 GitHub 提 issue</a
+              >
+              <button id="feedback-copy" class="button ghost" type="button">复制反馈内容</button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p><span id="footer-year">2026</span> · humansneeds.com · 渡鸦大人</p>
+      <p class="footer-links">
+        <a href="https://github.com/puppetcat-fire/knowledge-habit-tracker" rel="noopener" target="_blank"
+          >这个站的源码</a
+        >
+        <a href="#feedback">反馈</a>
+        <a href="#main">回到顶部</a>
+      </p>
+    </footer>
+
+    <script src="/site.js"></script>
+  </body>
+</html>
