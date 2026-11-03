@@ -10,7 +10,7 @@ module.exports = defineConfig({
           globals: true,
           environment: "node",
           include: ["tests/**/*.test.js"],
-          exclude: ["tests/frontend/**/*.test.js"]
+          exclude: ["tests/frontend/**/*.test.js", "tests/trial-ui/**/*.test.js"]
         }
       },
       {
@@ -19,6 +19,15 @@ module.exports = defineConfig({
           globals: true,
           environment: "jsdom",
           include: ["tests/frontend/**/*.test.js"]
+        }
+      },
+      {
+        // 试作原型的集成测试：在 jsdom 里真跑 main.js（注册 → 计时 → 切换 → 结束 → 战报 → 各页）
+        name: "trial-ui",
+        test: {
+          globals: true,
+          environment: "jsdom",
+          include: ["tests/trial-ui/**/*.test.js"]
         }
       }
     ]
