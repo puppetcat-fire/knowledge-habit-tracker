@@ -1,6 +1,6 @@
 const { loadApp } = require("./harness");
 
-const PLATFORM_ORIGIN = "http://127.0.0.1:3001/";
+const PLATFORM_ORIGIN = "/platform/";
 
 describe("the habit page is habit-only", () => {
   it("keeps the four daily nav buttons", () => {

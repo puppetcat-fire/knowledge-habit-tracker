@@ -1209,6 +1209,9 @@
     const result = await submitBug(payload);
     if (!result.ok) {
       showMessage(elements.bugStatus, result.message || "提交失败，请稍后重试。", false);
+      if (result.issueUrl) {
+        appendIssueLink(elements.bugStatus, result.issueUrl);
+      }
       return;
     }
     elements.bugForm.reset();
@@ -1231,12 +1234,62 @@
       });
       const data = await response.json();
       if (!response.ok) {
-        return { ok: false, message: data.message || "提交失败。" };
+        return {
+          ok: false,
+          message: data.message || "提交失败。",
+          issueUrl: buildIssueUrl(payload)
+        };
       }
       return { ok: true, bug: data.bug || null, message: data.message || "已提交。" };
     } catch {
-      return { ok: false, message: "无法连接到本地服务，请确认服务端已启动。" };
+      return {
+        ok: false,
+        message: "连不上本地服务。反馈内容可以带到 GitHub issue 里继续提交。",
+        issueUrl: buildIssueUrl(payload)
+      };
     }
+  }
+
+  function buildIssueUrl(payload) {
+    const body = [
+      payload.description,
+      "",
+      payload.steps ? `复现步骤：${payload.steps}` : "",
+      payload.expected ? `期望结果：${payload.expected}` : "",
+      payload.actual ? `实际结果：${payload.actual}` : "",
+      `严重级别：${payload.severity}`,
+      `联系方式：${payload.contact || "未填写"}`,
+      `来源页面：${payload.page || "unknown"}`,
+      "",
+      "---",
+      "（由习惯记录器的反馈面板生成）"
+    ]
+      .filter((line) => line !== "")
+      .join("\n")
+      .slice(0, 6000);
+    const params = new URLSearchParams({
+      title: payload.title,
+      body,
+      labels: "feedback"
+    });
+    return `https://github.com/puppetcat-fire/knowledge-habit-tracker/issues/new?${params.toString()}`;
+  }
+
+  function appendIssueLink(container, url) {
+    if (!container) {
+      return;
+    }
+    const previous = container.querySelector(".issue-fallback-link");
+    if (previous) {
+      previous.remove();
+    }
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.className = "issue-fallback-link";
+    link.textContent = "在 GitHub 上提交这条反馈";
+    container.appendChild(link);
   }
 
   async function loadRemoteBugs() {

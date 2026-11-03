@@ -2,7 +2,7 @@ const { loadPlatform, getState } = require("./platform-harness");
 
 const TREE_ID = "k9-math";
 const NODE_ID = "linear-equation";
-const HABIT_ORIGIN = "http://127.0.0.1:3000";
+const HABIT_ORIGIN = "/habit";
 
 let restoreLocation = null;
 

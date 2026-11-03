@@ -4,8 +4,8 @@
   const CUSTOM_HABIT_NAME = "自由记录";
   const TREE_FORMAT = "forest-tree/v1";
   const STATE_VERSION = 3;
-  // 「去做」把这次瞄准交回习惯服务：习惯页固定跑在本地服务的根路径上
-  const HABIT_ORIGIN = "http://127.0.0.1:3000";
+  // 「去做」把这次瞄准交回习惯服务：习惯页固定在同源的 /habit/ 下
+  const HABIT_ORIGIN = "/habit";
 
   // 平台页自身可以单文件运行；LOCAL_ONLY 时不连服务端，与 app.js 的约定一致
   const LOCAL_ONLY = globalThis.__KHT_LOCAL_ONLY__ === true;

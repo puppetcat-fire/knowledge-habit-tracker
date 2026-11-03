@@ -49,7 +49,7 @@ function createMainWindow() {
     }
   });
 
-  mainWindow.loadURL(BASE_URL);
+  mainWindow.loadURL(`${BASE_URL}/habit/`);
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -87,7 +87,7 @@ function createOverlayWindow() {
 
   overlayWindow.setAlwaysOnTop(true, "screen-saver");
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  overlayWindow.loadURL(`${BASE_URL}/overlay.html`);
+  overlayWindow.loadURL(`${BASE_URL}/habit/overlay.html`);
   overlayWindow.on("closed", () => {
     overlayWindow = null;
   });
