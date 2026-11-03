@@ -35,10 +35,21 @@ describe("the personal site homepage", () => {
     expect(document.querySelector('a[href="/habit/"]')).not.toBeNull();
     expect(document.querySelector('a[href="/platform/"]')).not.toBeNull();
     expect(document.querySelector('a[href="/needs/"]')).not.toBeNull();
-    expect(document.querySelector('a[href="/tools/perler-beads.html"]')).not.toBeNull();
+    expect(document.querySelector('a[href="/tools/perler-beads/"]')).not.toBeNull();
     expect(document.querySelector('a[href="/tools/todo.html"]')).not.toBeNull();
     expect(document.querySelector('a[href="mailto:xiaoboren0@gmail.com"]')).not.toBeNull();
     expect(document.title).toContain("humansneeds");
+  });
+
+  it("carries a sidebar for section navigation on wide screens", () => {
+    loadSite(() => jsonResponse({ status: "ok" }));
+
+    const rail = document.querySelector(".site-rail");
+
+    expect(rail).not.toBeNull();
+    expect(rail.querySelector('a[href="#tools"]')).not.toBeNull();
+    expect(rail.querySelector('a[href="#about"]')).not.toBeNull();
+    expect(rail.querySelector('a[href="#feedback"]')).not.toBeNull();
   });
 
   it("posts feedback to the local api when the service is up", async () => {
