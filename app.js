@@ -188,6 +188,16 @@
       if (!state.habit || !state.habit.active) {
         return;
       }
+      // 计时进行中（未暂停、未结束）时不允许再开始下一次：不能把正在走的这一次改写成下一个动作。
+      if (state.timer.running) {
+        setActivePage("timer");
+        showMessage(
+          elements.timerReport,
+          "这次计时还没暂停或结束，不能开始下一次计时。请先暂停或结束这次计时。",
+          false
+        );
+        return;
+      }
       state.timer.selectedHabitId = state.habit.id;
       state.timer.selectedHabitName = state.habit.name;
       state.timer.selectedOption = "custom";
@@ -570,6 +580,9 @@
     const action = resolveSelectedAction(candidates);
     state.timer.predictedAction = action;
     elements.timerPredictionInput.value = action;
+    // 新一次计时开始后，上一轮留下的提示（比如“不能开始下一次计时”）不再适用
+    elements.timerReport.classList.add("hidden");
+    elements.timerReport.textContent = "";
     state.timer.startedAt = new Date().toISOString();
     state.timer.running = true;
     saveState();
