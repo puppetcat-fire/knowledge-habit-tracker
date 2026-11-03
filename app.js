@@ -2304,7 +2304,7 @@
     guestMode = true;
     try {
       localStorage.setItem(GUEST_KEY, "1");
-    } catch {}
+    } catch { /* 本地存档不可用时忽略 */ }
     state = loadState();
     showApp();
     if (!appBooted) {
@@ -2454,7 +2454,7 @@
         guestMode = false;
         try {
           localStorage.removeItem(GUEST_KEY);
-        } catch {}
+        } catch { /* 本地存档不可用时忽略 */ }
         syncGuestChrome();
         await enterApp();
       } catch (error) {
@@ -2471,7 +2471,7 @@
           guestMode = false;
           try {
             localStorage.removeItem(GUEST_KEY);
-          } catch {}
+          } catch { /* 本地存档不可用时忽略 */ }
           syncGuestChrome();
           returnToGate();
           return;
@@ -2492,7 +2492,7 @@
     let resumingGuest = false;
     try {
       resumingGuest = localStorage.getItem(GUEST_KEY) === "1";
-    } catch {}
+    } catch { /* 本地存档不可用时忽略 */ }
     if (resumingGuest) {
       enterGuest();
       return;
