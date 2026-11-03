@@ -2,13 +2,16 @@
 
 渡鸦大人（[puppetcat-fire](https://github.com/puppetcat-fire)）的个人工具站。
 
-这里不只是一个习惯记录器：根路径是门面页，把做过的工具收在一起；两个应用挂在子路径下，共用同一套服务、账号和数据目录。INeedThis 是隔壁的独立站点，域名指向 `needs.humansneeds.com`。
+这里不只是一个习惯记录器：根路径是门面页，把做过的工具收在一起；两个应用挂在子路径下，共用同一套服务、账号和数据目录。INeedThis 是独立的 Next.js 应用，挂在同域的 `/needs/` 下；拼豆图纸和几个顺手做的小工具挂在 `/tools/` 下。
 
 | 路径 | 是什么 | 代码 |
 | --- | --- | --- |
 | `/` | 个人主页：工具导航、关于、反馈 | `site/` |
 | `/habit/` | 点亮 · 习惯记录器 | `index.html`、`app.js`、`style.css` |
 | `/platform/` | 知识共建共享平台 | `platform.html`、`platform.js`、`platform.css` |
+| `/needs/` | INeedThis · 需求图谱（独立 Next.js 应用，反代到 3200） | [puppetcat-fire/humansneeds](https://github.com/puppetcat-fire/humansneeds) |
+| `/tools/` | 小工具页：拼豆图纸、待办清单、MBTI 测试等 | 服务器上的静态页，不在本仓库 |
+| `/tools/perler-beads.html` | 拼豆图纸页（已上线） | 服务器上的静态页，不在本仓库 |
 | `/api/*` | 账号、状态、记录、节点、反馈 | `server.js` |
 | `/health` | 健康检查 | `server.js` |
 | 旧地址 `/index.html`、`/platform.html`、`:3001` | 301 到新路径 | `server.js` |
@@ -36,6 +39,8 @@ npm start
 4. 如果是新的 Node 应用，在 `server.js` 的 `PUBLIC_FILES` 里加白名单，只放会发出去的文件。
 
 新增的站内工具如果也要走 `data/`，直接复用 `/api/*` 和 `state-sync.js` 即可。
+
+首页底部的「还有这些顺手做的小东西」就是 `/tools/` 的入口：拼豆图纸页在 `/tools/perler-beads.html`，待办、MBTI 测试、灵魂宠物等也都在同一个目录下（服务器上的静态页，不在本仓库）。
 
 ## 反馈是怎么走的
 
@@ -157,8 +162,6 @@ npm run desktop
 
 ## 待办
 
-- 拼豆图纸页：给我地址后，把首页 `04 · 手作` 那张卡片换成真实链接
-- INeedThis 的 `basePath: "/needs"` 和 3200 端口反代要跟着一起部署
 - 知识共建平台的身份、权限和审核流
 - 节点候选升级成可编辑的教程节点
 
