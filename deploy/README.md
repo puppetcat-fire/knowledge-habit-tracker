@@ -1,6 +1,32 @@
 # 部署 humansneeds.com
 
-站点没有构建步骤：一个 Node 进程 + 一个反向代理。下面是最短路径。
+站点没有构建步骤：一个 Node 进程 + 一个反向代理。
+
+## 线上实际配置
+
+`humansneeds.com` 现在跑在下面这套配置上，从零部署时可以参考后面几节的通用示例，但以这里为准：
+
+| 项 | 值 |
+| --- | --- |
+| 代码目录 | `/opt/humansneeds-site`（git 检出，跟随 `origin/master`） |
+| 服务 | `humansneeds-site.service`，`node server.js`，监听 `127.0.0.1:3100` |
+| 数据目录 | `/var/lib/humansneeds-site`（`DATA_DIR`） |
+| 环境变量 | 写在 systemd unit 里：`HOST`、`PORT`、`DATA_DIR`、`ALLOWED_ORIGINS`、`TRUST_PROXY=loopback`、`COOKIE_SECURE`、`ENABLE_RATE_LIMIT` |
+| 反向代理 | `/etc/nginx/sites-enabled/humansneeds`，`/`、`/habit/`、`/platform/` → `127.0.0.1:3100` |
+
+## 自动部署（合并即上线）
+
+服务器上有个 systemd timer 盯着 `origin/master`：
+
+- `humansneeds-site-deploy.timer` 每 60 秒触发一次 `humansneeds-site-deploy.service`
+- 发现新提交：`git reset --hard origin/master` → `package-lock.json` 变了才 `npm ci --omit=dev` → 重启 `humansneeds-site` → 自检 `/health`、`/`、`/habit/`、`/platform/`
+- 自检失败会自动回滚到上一个提交并重启
+- 手工触发一次：`systemctl start humansneeds-site-deploy.service`
+- 看日志：`journalctl -u humansneeds-site-deploy -n 50`
+
+所以 **PR 合并进 `master` 就是上线**，通常一分钟内生效，不需要登服务器。要回滚就在 GitHub 上 revert 那个 PR，不要在服务器上直接 `git reset` 抵着来——下一轮拉取会把它同步回去。
+
+脚本在 `/usr/local/bin/humansneeds-site-deploy`，unit 文件在 `/etc/systemd/system/humansneeds-site-deploy.{service,timer}`。
 
 ## 1. 机器上放代码
 
