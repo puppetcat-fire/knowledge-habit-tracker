@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>可编辑原型</title><style>
+*{box-sizing:border-box}body{margin:0;background:#eef1f5;color:#243047;font:14px "Segoe UI","Microsoft YaHei",sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer;border:1px solid #cfd6e1;background:white;color:inherit;border-radius:6px;padding:8px 12px}button:disabled{opacity:.4;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #4568db;outline-offset:2px}input,select,textarea{width:100%;border:1px solid #ced6e1;border-radius:5px;padding:8px;background:white;color:inherit}textarea{resize:vertical}header{position:sticky;top:0;z-index:10;background:white;border-bottom:1px solid #d9dfe8;padding:12px 20px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}header strong{margin-right:auto}.primary{background:#345bd1;border-color:#345bd1;color:white}.layout{display:grid;grid-template-columns:180px minmax(0,1fr) 240px;min-height:calc(100vh - 80px)}aside{padding:18px;background:#fff;border-right:1px solid #d9dfe8}.inspector{border-right:0;border-left:1px solid #d9dfe8}.muted{font-size:12px;color:#6a7689;line-height:1.7}.screens{display:grid;gap:8px;margin:16px 0}.screen-button{text-align:left}.screen-button.selected{border-color:#345bd1;background:#eef2ff}.field{display:block;margin:12px 0}.field span{display:block;font-size:12px;color:#626d80;margin-bottom:5px}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:10px}.tools{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.tools button{font-size:12px}main{padding:24px 20px;overflow:auto}.stage-heading{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px}.stage-wrap{position:relative;margin:auto}.stage{position:absolute;left:0;top:0;transform-origin:top left;background:#fff;border:1px solid #d1d9e5;box-shadow:0 8px 24px #27364d10;overflow:hidden;border-radius:12px}.editing .stage{background-image:radial-gradient(#c8cfda 1px,transparent 1px);background-size:10px 10px}.block{position:absolute;display:flex;align-items:center;justify-content:center;white-space:pre-wrap;overflow-wrap:anywhere;padding:8px;border:1px solid transparent;border-radius:7px;font-size:16px;color:#25324a;background:transparent;text-align:center}.block.card{background:#f6f8fb;border-color:#d7dfe9;font-size:14px}.block.button{border-color:#9eabba;background:white;font-size:15px}.block.button.primary{background:#345bd1;border-color:#345bd1;color:white}.block.input{border-color:#c8d1de;justify-content:flex-start;color:#7a8597;font-size:14px}.editing .block{cursor:move;touch-action:none;user-select:none}.editing .block:hover{outline:1px dashed #6480dd}.editing .block.selected{outline:2px solid #345bd1;outline-offset:2px}.stage-note{text-align:center;max-width:540px;margin:18px auto;color:#768093;line-height:1.7;font-size:12px}#message{width:100%;font-size:12px;color:#5a6880;min-height:16px}details summary{cursor:pointer}.preview .edit-only{display:none}.preview .layout{grid-template-columns:180px minmax(0,1fr)}.preview .block.button{cursor:pointer}.inspector h3{font-size:15px;margin-top:0}.danger{color:#b44b4b}#file-input{display:none}@media(max-width:700px){.layout,.preview .layout{grid-template-columns:140px minmax(0,1fr)}.inspector{grid-column:1/-1;border-top:1px solid #d9dfe8}header{padding:10px}main{padding:18px 10px}aside{padding:14px 10px}}@media(max-width:500px){.layout,.preview .layout{display:block}aside{border-bottom:1px solid #d9dfe8}.screens{display:flex;overflow-x:auto;margin:10px 0}.screen-button{flex-shrink:0}}
+/* 批注侧栏（附加层，不改编辑器核心逻辑） */
+#cm-open{margin-left:auto}
+#cm-open.open{background:#345bd1;border-color:#345bd1;color:#fff}
+.cm-panel{position:fixed;top:0;right:0;bottom:0;width:336px;background:#fff;border-left:1px solid #d9dfe8;box-shadow:-10px 0 28px #27364d1a;display:flex;flex-direction:column;z-index:30;transform:translateX(103%);transition:transform .18s ease}
+body.cm-open .cm-panel{transform:none}
+body.cm-open .layout,body.cm-open header{margin-right:336px}
+.cm-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #e3e8ef}
+.cm-head strong{font-size:15px}
+.cm-count{font-size:12px;color:#6a7689}
+.cm-head button{margin-left:auto;font-size:12px;padding:6px 10px}
+.cm-body{flex:1;overflow:auto;padding:12px 14px}
+.cm-form{border:1px solid #dbe2ec;border-radius:8px;padding:10px;background:#f7f9fc}
+.cm-target{font-size:12px;color:#495a75;line-height:1.6;margin:0 0 6px}
+.cm-target b{color:#243047}
+.cm-pill{display:inline-block;border:1px solid #cfd8e5;border-radius:99px;padding:0 6px;font-size:11px;color:#5b6b85;margin-left:4px}
+.cm-form textarea{min-height:66px}
+.cm-actions{display:flex;gap:8px;margin-top:8px}
+.cm-actions button{font-size:12px;padding:6px 10px}
+.cm-hint{font-size:12px;color:#7b8798;line-height:1.6;margin:8px 0 0}
+.cm-list{display:grid;gap:10px;margin-top:14px}
+.cm-empty{font-size:13px;color:#7b8798;line-height:1.7;border:1px dashed #d5dce6;border-radius:8px;padding:14px;margin:0}
+.cm-item{border:1px solid #dfe5ee;border-radius:8px;padding:10px;background:#fff}
+.cm-item.resolved{background:#f6f8fb;border-color:#e6eaf1}
+.cm-item.resolved .cm-text{color:#8794a8;text-decoration:line-through;text-decoration-color:#b9c2cf}
+.cm-where{font-size:12px;color:#4b5c78;line-height:1.6;margin:0 0 6px;overflow-wrap:anywhere}
+.cm-where em{font-style:normal;color:#243047;font-weight:600}
+.cm-text{font-size:13px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+.cm-meta{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+.cm-meta button{font-size:12px;padding:4px 8px}
+.cm-meta time{font-size:11px;color:#8a95a6;margin-left:auto}
+.cm-foot{border-top:1px solid #e3e8ef;padding:10px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cm-foot button{font-size:12px;padding:6px 10px}
+.cm-foot span{font-size:12px;color:#6a7689;margin-left:auto}
+.cm-has::after{content:'';position:absolute;right:-4px;top:-4px;width:9px;height:9px;border-radius:50%;background:#e2a33c;border:2px solid #fff;box-shadow:0 0 0 1px #d8b877}
+.cm-flash{animation:cm-flash 1.6s ease}
+@keyframes cm-flash{0%,100%{box-shadow:none}20%,60%{box-shadow:0 0 0 3px #e2a33c}}
+@media(max-width:760px){.cm-panel{width:100%}body.cm-open .layout,body.cm-open header{margin-right:0}}
+</style></head><body class="editing" data-save-mode="local">
+<header><strong id="project-title">交互原型</strong><button id="mode" class="primary">预览跳转</button><button id="undo" class="edit-only">撤销</button><button id="redo" class="edit-only">重做</button><button id="save">保存到文件</button><button id="export-json">导出 JSON</button><button id="export-html">导出 HTML</button><button id="import" class="edit-only">导入 JSON</button><button id="cm-open" type="button" aria-expanded="false" aria-controls="cm-panel">批注</button>
+<input id="file-input" type="file" accept=".json,application/json"><span id="message" role="status">仅编辑原型，不涉及真实产品数据。</span></header>
+<div class="layout"><aside><strong>页面与状态</strong><p class="muted">编辑时选页面；预览时点按钮验证跳转。</p><div id="screens" class="screens"></div><div class="edit-only"><button id="add-screen">＋ 添加页面</button><label class="field"><span>当前页面名称</span><input id="screen-name"></label><button id="remove-screen" class="danger">删除当前页面</button><div class="tools"><button data-add="text">＋ 文字</button><button data-add="button">＋ 按钮</button><button data-add="input">＋ 输入框</button><button data-add="card">＋ 区块</button></div><details><summary>说明与待定规则</summary><textarea id="project-notes" aria-label="说明与待定规则" rows="8"></textarea></details></div></aside>
+<main><div class="stage-heading"><strong id="screen-heading"></strong><button id="back">返回上一步</button><button id="home">从首页开始</button></div><div id="stage-wrap" class="stage-wrap"><div id="stage" class="stage" aria-label="原型画布"></div></div><p id="stage-note" class="stage-note">点击元素编辑，拖动调整位置；右侧设置按钮跳转。</p></main>
+<aside class="inspector edit-only"><h3>元素属性</h3><p id="empty-inspector" class="muted">先点击画布里的文字或按钮。</p><div id="element-fields" hidden><label class="field"><span>文字</span><textarea id="prop-text" rows="3" maxlength="1000"></textarea></label><label class="field"><span>类型</span><select id="prop-type"><option value="text">文字</option><option value="button">按钮</option><option value="input">输入框</option><option value="card">区块</option></select></label><div class="twocol"><label class="field"><span>横向位置</span><input id="prop-x" type="number"></label><label class="field"><span>纵向位置</span><input id="prop-y" type="number"></label><label class="field"><span>宽度</span><input id="prop-w" type="number" min="20"></label><label class="field"><span>高度</span><input id="prop-h" type="number" min="20"></label></div><label class="field"><span>点击后跳转到</span><select id="prop-target"></select></label><label class="field"><span>样式</span><select id="prop-variant"><option value="default">普通</option><option value="primary">主要操作</option></select></label><button id="duplicate">复制元素</button><button id="remove-element" class="danger">删除元素</button><p id="element-id" class="muted"></p></div><hr><label class="field"><span>画布宽度</span><input id="canvas-width" type="number" min="240" max="1600"></label><label class="field"><span>画布高度</span><input id="canvas-height" type="number" min="320" max="2400"></label></aside></div>
+<aside id="cm-panel" class="cm-panel" aria-label="批注侧栏" aria-hidden="true">
+<div class="cm-head"><strong>批注</strong><span class="cm-count" id="cm-count">0 条</span><button id="cm-close" type="button">收起</button></div>
+<div class="cm-body">
+<div class="cm-form">
+<p class="cm-target" id="cm-target">目标：<b>—</b></p>
+<textarea id="cm-text" rows="3" maxlength="2000" placeholder="例如：这个按钮应该跳到方法页 / 文案改成「开始练习」/ 这里少了返回入口"></textarea>
+<div class="cm-actions"><button id="cm-add" class="primary" type="button">添加批注</button><button id="cm-page" type="button">改为整页批注</button></div>
+<p class="cm-hint">在画布上点一个元素，批注就挂到它；点左侧页面名切换页面。批注写进原型目录的 comments.json，不进真实产品。</p>
+</div>
+<div class="cm-list" id="cm-list"></div>
+</div>
+<div class="cm-foot"><button id="cm-export" type="button">导出 Markdown</button><button id="cm-reload" type="button">重新读取</button><span id="cm-status"></span></div>
+</aside>
+<script id="prototype-data" type="application/json">{"format":"editable-prototype/v1","id":"blank-prototype","title":"可编辑交互原型","updatedAt":"","notes":"","startScreen":"home","width":390,"height":720,"screens":[{"id":"home","name":"首页","elements":[]}]}</script>
+<script>
+(() => {
+'use strict';
+const $=id=>document.getElementById(id), clone=v=>JSON.parse(JSON.stringify(v));
+let project=JSON.parse($('prototype-data').textContent),screenId=project.startScreen,elementId=null,preview=false,scale=1,undo=[],redo=[],trail=[],drag=null;
+const serverMode=document.body.dataset.saveMode==='server'&&location.protocol.startsWith('http');
+const key=()=> 'editable-prototype:'+project.id;
+const say=t=>$('message').textContent=t;
+const screen=()=>project.screens.find(s=>s.id===screenId)||project.screens[0];
+const element=()=>screen().elements.find(e=>e.id===elementId);
+function valid(p){
+ if(!p||p.format!=='editable-prototype/v1'||typeof p.id!=='string'||!p.id||typeof p.title!=='string'||!Array.isArray(p.screens)||!p.screens.length||p.screens.length>40||!Number.isFinite(p.width)||p.width<240||p.width>1600||!Number.isFinite(p.height)||p.height<320||p.height>2400)throw Error('不是有效的交互原型文件');
+ const ids=new Set();for(const s of p.screens){if(typeof s.id!=='string'||!s.id||ids.has(s.id)||typeof s.name!=='string'||!Array.isArray(s.elements)||s.elements.length>200)throw Error('页面格式或编号有误');ids.add(s.id);const eids=new Set();for(const e of s.elements){if(typeof e.id!=='string'||!e.id||eids.has(e.id)||!['text','button','input','card'].includes(e.type)||typeof e.text!=='string'||e.text.length>1000||!['x','y','w','h'].every(k=>Number.isFinite(e[k]))||e.x<0||e.y<0||e.w<20||e.h<20||e.x+e.w>p.width||e.y+e.h>p.height||(e.target&&typeof e.target!=='string'))throw Error('元素格式或位置有误');eids.add(e.id);}}
+ if(!ids.has(p.startScreen)||p.screens.some(s=>s.elements.some(e=>e.target&&!ids.has(e.target))))throw Error('存在指向不存在页面的跳转');return p;
+}
+function remember(){undo.push(clone(project));if(undo.length>50)undo.shift();redo=[];}
+function draft(){project.updatedAt=new Date().toISOString();try{localStorage.setItem(key(),JSON.stringify(project));say('浏览器草稿已保存；完成后点“保存到文件”。');}catch{say('无法保存浏览器草稿，请导出 JSON。');}}
+function change(fn){remember();fn();draft();render();}
+function uid(){return crypto.randomUUID?crypto.randomUUID():'id-'+Date.now()+'-'+Math.random().toString(36).slice(2);}
+function fit(){scale=Math.min(1,Math.max(220,$('stage-wrap').parentElement.clientWidth-40)/project.width);$('stage-wrap').style.width=project.width*scale+'px';$('stage-wrap').style.height=project.height*scale+'px';Object.assign($('stage').style,{width:project.width+'px',height:project.height+'px',transform:'scale('+scale+')'});}
+function navigate(target){if(!project.screens.some(s=>s.id===target)){say('这个元素还没有设置跳转目的地。');return;}trail.push(screenId);screenId=target;elementId=null;render();}
+function inspector(){const e=element();$('element-fields').hidden=!e;$('empty-inspector').hidden=!!e;if(!e)return;['text','type','x','y','w','h','variant'].forEach(k=>$('prop-'+k).value=e[k]??'default');$('element-id').textContent='元素编号：'+e.id;$('prop-target').replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='不跳转';$('prop-target').append(empty);project.screens.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.name;$('prop-target').append(o);});$('prop-target').value=e.target||'';}
+function render(){
+ if(!project.screens.some(s=>s.id===screenId))screenId=project.startScreen;
+ $('project-title').textContent=project.title;document.title=project.title+' · 可编辑原型';$('screen-heading').textContent=screen().name;$('screen-name').value=screen().name;$('project-notes').value=project.notes||'';$('canvas-width').value=project.width;$('canvas-height').value=project.height;
+ $('screens').replaceChildren();project.screens.forEach(s=>{const b=document.createElement('button');b.className='screen-button'+(s.id===screenId?' selected':'');b.textContent=s.name;b.onclick=()=>{screenId=s.id;elementId=null;render();};$('screens').append(b);});
+ $('stage').replaceChildren();screen().elements.forEach(e=>{
+  const b=document.createElement(e.type==='button'?'button':'div');b.className='block '+e.type+(e.variant==='primary'?' primary':'')+(!preview&&e.id===elementId?' selected':'');b.textContent=e.text;b.dataset.elementId=e.id;Object.assign(b.style,{left:e.x+'px',top:e.y+'px',width:e.w+'px',height:e.h+'px'});
+  if(!preview){b.tabIndex=0;b.setAttribute('aria-label','编辑元素：'+e.text);b.onkeydown=ev=>{if(ev.key==='Enter'){elementId=e.id;render();}};}
+  b.onclick=()=>{if(preview){if(e.type==='button'||e.target)navigate(e.target);}else{elementId=e.id;render();}};
+  b.onpointerdown=ev=>{if(preview||ev.button!==0)return;elementId=e.id;drag={id:e.id,x:ev.clientX,y:ev.clientY,ox:e.x,oy:e.y,before:clone(project),moved:false};b.setPointerCapture(ev.pointerId);ev.preventDefault();inspector();};
+  b.onpointermove=ev=>{if(!drag||drag.id!==e.id)return;const dx=(ev.clientX-drag.x)/scale,dy=(ev.clientY-drag.y)/scale;if(Math.abs(dx)+Math.abs(dy)<3)return;drag.moved=true;e.x=Math.max(0,Math.min(project.width-e.w,Math.round((drag.ox+dx)/5)*5));e.y=Math.max(0,Math.min(project.height-e.h,Math.round((drag.oy+dy)/5)*5));b.style.left=e.x+'px';b.style.top=e.y+'px';inspector();};
+  b.onpointerup=()=>{if(!drag)return;if(drag.moved){undo.push(drag.before);if(undo.length>50)undo.shift();redo=[];draft();}drag=null;render();};
+  b.onpointercancel=()=>{if(drag){project=drag.before;drag=null;render();}};$('stage').append(b);
+ });inspector();$('back').disabled=!trail.length;$('remove-screen').disabled=project.screens.length<=1;$('undo').disabled=!undo.length;$('redo').disabled=!redo.length;fit();
+}
+['text','type','x','y','w','h','target','variant'].forEach(k=>$('prop-'+k).onchange=()=>{if(!element())return;let v=$('prop-'+k).value;if(['x','y','w','h'].includes(k)){v=Number(v);if(!Number.isFinite(v)){render();return;}}change(()=>{const e=element();e[k]=v;e.w=Math.max(20,Math.min(e.w,project.width));e.h=Math.max(20,Math.min(e.h,project.height));e.x=Math.max(0,Math.min(e.x,project.width-e.w));e.y=Math.max(0,Math.min(e.y,project.height-e.h));});});
+$('screen-name').onchange=()=>change(()=>screen().name=$('screen-name').value.trim()||'未命名页面');$('project-notes').onchange=()=>change(()=>project.notes=$('project-notes').value);
+['width','height'].forEach(k=>$('canvas-'+k).onchange=()=>{const n=Number($('canvas-'+k).value);if(!Number.isFinite(n)||n<(k==='width'?240:320)||n>(k==='width'?1600:2400)){render();return;}change(()=>{project[k]=n;project.screens.forEach(s=>s.elements.forEach(e=>{e.w=Math.min(e.w,project.width);e.h=Math.min(e.h,project.height);e.x=Math.min(e.x,project.width-e.w);e.y=Math.min(e.y,project.height-e.h);}));});});
+document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>change(()=>{const type=b.dataset.add,e={id:uid(),type,text:{text:'新文字',button:'新按钮',input:'输入框',card:'内容区块'}[type],x:30,y:80,w:Math.min(220,project.width-60),h:type==='card'?100:48,target:'',variant:'default'};screen().elements.push(e);elementId=e.id;}));
+$('duplicate').onclick=()=>{if(element())change(()=>{const e=clone(element());e.id=uid();e.x=Math.min(e.x+15,project.width-e.w);e.y=Math.min(e.y+15,project.height-e.h);screen().elements.push(e);elementId=e.id;});};$('remove-element').onclick=()=>{if(element())change(()=>{screen().elements=screen().elements.filter(e=>e.id!==elementId);elementId=null;});};
+$('add-screen').onclick=()=>change(()=>{const s={id:uid(),name:'新页面 '+(project.screens.length+1),elements:[]};project.screens.push(s);screenId=s.id;elementId=null;});
+$('remove-screen').onclick=()=>{if(project.screens.length<=1)return;change(()=>{const removed=screenId;project.screens=project.screens.filter(s=>s.id!==removed);project.screens.forEach(s=>s.elements.forEach(e=>{if(e.target===removed)e.target='';}));if(project.startScreen===removed)project.startScreen=project.screens[0].id;screenId=project.startScreen;elementId=null;trail=[];});};
+$('undo').onclick=()=>{if(!undo.length)return;redo.push(clone(project));project=undo.pop();elementId=null;draft();render();};$('redo').onclick=()=>{if(!redo.length)return;undo.push(clone(project));project=redo.pop();elementId=null;draft();render();};
+$('mode').onclick=()=>{preview=!preview;document.body.className=preview?'preview':'editing';$('mode').textContent=preview?'返回编辑':'预览跳转';$('stage-note').textContent=preview?'模拟数据仅用于确认界面，点击按钮验证跳转。':'点击元素编辑，拖动调整位置；右侧设置按钮跳转。';elementId=null;trail=[];render();};$('back').onclick=()=>{if(trail.length){screenId=trail.pop();elementId=null;render();}};$('home').onclick=()=>{screenId=project.startScreen;trail=[];elementId=null;render();};
+function download(name,content,type){const url=URL.createObjectURL(new Blob([content],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+$('export-json').onclick=()=>{valid(project);download('project.json',JSON.stringify(project,null,2),'application/json');say('已导出当前原型 JSON。');};
+$('export-html').onclick=()=>{valid(project);const doc=document.documentElement.cloneNode(true);doc.querySelector('#prototype-data').textContent=JSON.stringify(project).replace(/</g,'\\u003c');doc.querySelector('body').dataset.saveMode='local';doc.querySelector('body').className='editing';doc.querySelector('#mode').textContent='预览跳转';doc.querySelector('#stage').replaceChildren();download('prototype.html','<!doctype html>\n'+doc.outerHTML,'text/html');say('已导出包含当前页面和跳转的独立 HTML。');};
+$('import').onclick=()=>$('file-input').click();$('file-input').onchange=async ev=>{const file=ev.target.files[0];if(!file)return;try{if(file.size>1048576)throw Error('文件不能超过 1 MB');const next=valid(JSON.parse(await file.text()));remember();project=next;screenId=project.startScreen;elementId=null;trail=[];draft();render();say('已导入，需要时可撤销。');}catch(error){say('导入失败：'+error.message+'；原有内容未改变。');}ev.target.value='';};
+$('save').onclick=async()=>{try{valid(project);if(!serverMode){download('project.json',JSON.stringify(project,null,2),'application/json');say('已导出原型文件，此模式不会写项目目录。');return;}const response=await fetch('/api/prototype',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(project)});if(!response.ok)throw Error('保存失败，请重试或导出 JSON');say('已保存到 project.json，之后可交给 Codex 实现。');}catch(error){say(error.message);}};
+async function init(){try{let remote=valid(project);if(serverMode){const response=await fetch('/api/prototype');if(!response.ok)throw Error('原型文件读取失败');remote=valid(await response.json());}const cached=localStorage.getItem('editable-prototype:'+remote.id),local=cached?valid(JSON.parse(cached)):null;project=local&&Date.parse(local.updatedAt)>(Date.parse(remote.updatedAt)||0)?local:remote;screenId=project.startScreen;render();say('编辑模式：拖动、改文字、设置跳转，完成后保存到文件。');}catch(error){render();say(error.message+'；当前嵌入原型仍可编辑，请先导出保留。');}}
+window.addEventListener('resize',fit);init();
+})();
+</script><script>(() => {
+'use strict';
+/* 批注侧栏：独立附加层。只依赖编辑器的 DOM 约定：
+   #screens 里的 .selected 按钮 = 当前页（与 project.screens 同序），#stage .block.selected = 当前选中元素。
+   批注写入原型目录的 comments.json（本机服务模式），离线时退化为浏览器草稿 + 导出。 */
+const $ = (id) => document.getElementById(id);
+const panel = $('cm-panel');
+if (!panel) return;
+const stage = $('stage');
+const screensBox = $('screens');
+const serverMode = document.body.dataset.saveMode === 'server' && location.protocol.startsWith('http');
+const FORMAT = 'editable-prototype-comments/v1';
+const projectNode = document.getElementById('prototype-data');
+let projectId = 'prototype';
+try { projectId = JSON.parse(projectNode.textContent).id || projectId; } catch (e) { /* 保持默认 */ }
+const localKey = 'editable-prototype-comments:' + projectId;
+
+let project = null;
+let comments = [];
+let pageOnly = false;
+
+const say = (t) => { $('cm-status').textContent = t; };
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'c-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+const attr = (value) => String(value).replace(/["\\]/g, '\\$&');
+const button = (label, handler) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.onclick = handler; return b; };
+
+function normalize(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const text = typeof raw.text === 'string' ? raw.text.trim() : '';
+  if (!text) return null;
+  return {
+    id: typeof raw.id === 'string' && raw.id ? raw.id : uid(),
+    screenId: typeof raw.screenId === 'string' ? raw.screenId : '',
+    elementId: typeof raw.elementId === 'string' && raw.elementId ? raw.elementId : null,
+    elementText: typeof raw.elementText === 'string' ? raw.elementText : '',
+    text,
+    resolved: raw.resolved === true,
+    createdAt: Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now(),
+    author: typeof raw.author === 'string' ? raw.author : ''
+  };
+}
+
+function normalizePayload(payload) {
+  const list = Array.isArray(payload) ? payload : payload && Array.isArray(payload.comments) ? payload.comments : [];
+  return list.map(normalize).filter(Boolean);
+}
+
+function payload() {
+  return { format: FORMAT, updatedAt: new Date().toISOString(), comments };
+}
+
+async function loadProject() {
+  if (serverMode) {
+    try {
+      const response = await fetch('/api/prototype');
+      if (response.ok) return JSON.parse(await response.text());
+    } catch (error) { /* 退回内嵌数据 */ }
+  }
+  try { return JSON.parse(projectNode.textContent); } catch (error) { return { screens: [] }; }
+}
+
+async function loadComments() {
+  let remote = null;
+  if (serverMode) {
+    try {
+      const response = await fetch('/api/comments');
+      if (response.ok) remote = normalizePayload(await response.json());
+    } catch (error) { say('读取 comments.json 失败：' + error.message); }
+  }
+  if (remote) return remote;
+  try {
+    const raw = localStorage.getItem(localKey);
+    return raw ? normalizePayload(JSON.parse(raw)) : [];
+  } catch (error) { return []; }
+}
+
+function currentScreen() {
+  const screens = (project && project.screens) || [];
+  const buttons = screensBox ? Array.from(screensBox.querySelectorAll('button')) : [];
+  const index = buttons.findIndex((b) => b.className.indexOf('selected') >= 0);
+  const heading = ($('screen-heading') || {}).textContent || '';
+  if (index >= 0 && screens[index] && (!heading || screens[index].name === heading)) return screens[index];
+  const byName = screens.find((s) => s.name === heading);
+  if (byName) return byName;
+  return screens[index >= 0 ? index : 0] || { id: '', name: '' };
+}
+
+function findElement(screenId, elementId) {
+  const screen = ((project && project.screens) || []).find((s) => s.id === screenId);
+  return screen ? screen.elements.find((e) => e.id === elementId) : null;
+}
+
+function elementText(screenId, elementId) {
+  const element = findElement(screenId, elementId);
+  if (element && element.text) return element.text;
+  const node = stage && stage.querySelector('[data-element-id="' + attr(elementId) + '"]');
+  return node && node.textContent ? node.textContent.trim() : '';
+}
+
+function currentTarget() {
+  const screen = currentScreen();
+  const selected = stage ? stage.querySelector('.block.selected') : null;
+  const elementId = pageOnly || !selected ? null : selected.dataset.elementId;
+  return {
+    screenId: screen.id,
+    screenName: screen.name,
+    elementId,
+    elementText: elementId ? elementText(screen.id, elementId) : ''
+  };
+}
+
+function renderTarget() {
+  const target = currentTarget();
+  const line = $('cm-target');
+  line.replaceChildren(document.createTextNode('目标：'));
+  const strong = document.createElement('b');
+  strong.textContent = target.screenName || '未命名页面';
+  line.append(strong, document.createTextNode(target.elementId ? ' · ' + (target.elementText || target.elementId) : ' · 整页'));
+  const pill = document.createElement('span');
+  pill.className = 'cm-pill';
+  pill.textContent = pageOnly ? '整页批注' : target.elementId ? '单个元素' : '整页';
+  line.append(pill);
+}
+
+function decorate() {
+  if (!stage) return;
+  const screen = currentScreen();
+  const marked = new Set(comments.filter((c) => c.screenId === screen.id && c.elementId).map((c) => c.elementId));
+  stage.querySelectorAll('.block').forEach((block) => {
+    if (marked.has(block.dataset.elementId)) block.classList.add('cm-has');
+    else block.classList.remove('cm-has');
+  });
+}
+
+function renderList() {
+  const list = $('cm-list');
+  list.replaceChildren();
+  const sorted = comments.slice().sort((a, b) => (a.resolved === b.resolved ? b.createdAt - a.createdAt : a.resolved ? 1 : -1));
+  if (!sorted.length) {
+    const empty = document.createElement('p');
+    empty.className = 'cm-empty';
+    empty.textContent = '还没有批注。先在画布上点一个元素，写下要改的地方，再点「添加批注」。';
+    list.append(empty);
+  }
+  for (const comment of sorted) {
+    const item = document.createElement('div');
+    item.className = 'cm-item' + (comment.resolved ? ' resolved' : '');
+    const screen = ((project && project.screens) || []).find((s) => s.id === comment.screenId);
+    const where = document.createElement('p');
+    where.className = 'cm-where';
+    where.append(document.createTextNode((screen ? screen.name : comment.screenId || '未知页面') + ' · '));
+    const em = document.createElement('em');
+    em.textContent = comment.elementText || (comment.elementId ? comment.elementId : '整页');
+    where.append(em);
+    const text = document.createElement('p');
+    text.className = 'cm-text';
+    text.textContent = comment.text;
+    const meta = document.createElement('div');
+    meta.className = 'cm-meta';
+    meta.append(
+      button(comment.resolved ? '标记未处理' : '标记已处理', () => { comment.resolved = !comment.resolved; persist(); }),
+      button('定位', () => locate(comment)),
+      button('删除', () => { comments = comments.filter((c) => c.id !== comment.id); persist(); })
+    );
+    const time = document.createElement('time');
+    time.textContent = new Date(comment.createdAt).toLocaleString('zh-CN');
+    meta.append(time);
+    item.append(where, text, meta);
+    list.append(item);
+  }
+  const open = comments.filter((c) => !c.resolved).length;
+  $('cm-count').textContent = open ? open + ' 条未处理 / 共 ' + comments.length + ' 条' : '共 ' + comments.length + ' 条';
+  const trigger = $('cm-open');
+  trigger.textContent = open ? '批注 ' + open : '批注';
+  trigger.className = open ? 'open' : '';
+  decorate();
+}
+
+async function persist() {
+  renderList();
+  if (serverMode) {
+    try {
+      const response = await fetch('/api/comments', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload()) });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      say('已写入 comments.json');
+      return;
+    } catch (error) {
+      say('写文件失败，改存浏览器草稿：' + error.message);
+    }
+  } else {
+    say('已存浏览器草稿（离线模式不写文件）');
+  }
+  try { localStorage.setItem(localKey, JSON.stringify(comments)); } catch (error) { say('浏览器草稿也存不下：' + error.message); }
+}
+
+function locate(comment) {
+  const screens = (project && project.screens) || [];
+  const index = screens.findIndex((s) => s.id === comment.screenId);
+  const buttons = screensBox ? Array.from(screensBox.querySelectorAll('button')) : [];
+  if (index >= 0 && buttons[index]) buttons[index].click();
+  if (!comment.elementId) return;
+  setTimeout(() => {
+    const block = stage && stage.querySelector('[data-element-id="' + attr(comment.elementId) + '"]');
+    if (!block) return;
+    block.classList.add('cm-flash');
+    setTimeout(() => block.classList.remove('cm-flash'), 1700);
+  }, 40);
+}
+
+async function add() {
+  const box = $('cm-text');
+  const text = box.value.trim();
+  if (!text) { say('先写批注内容。'); box.focus(); return; }
+  const target = currentTarget();
+  comments.push({
+    id: uid(),
+    screenId: target.screenId,
+    elementId: target.elementId,
+    elementText: target.elementText,
+    text,
+    resolved: false,
+    createdAt: Date.now(),
+    author: ''
+  });
+  box.value = '';
+  pageOnly = false;
+  renderTarget();
+  await persist();
+  say((serverMode ? '已写入 comments.json：' : '已添加（只存浏览器草稿，未写文件）：') + (target.screenName || '未命名页面') + ' · ' + (target.elementText || '整页'));
+}
+
+function markdown() {
+  const open = comments.filter((c) => !c.resolved);
+  const done = comments.filter((c) => c.resolved);
+  const line = (c) => {
+    const screen = ((project && project.screens) || []).find((s) => s.id === c.screenId);
+    const where = (screen ? screen.name : c.screenId || '未知页面') + ' · ' + (c.elementText || (c.elementId ? c.elementId : '整页'));
+    return '- [' + where + '] ' + c.text.replace(/\n/g, ' ') + '（' + new Date(c.createdAt).toLocaleString('zh-CN') + '）';
+  };
+  const out = ['# 交互原型批注 · ' + ((project && project.title) || '未命名原型'), ''];
+  out.push('未处理 ' + open.length + ' 条，已处理 ' + done.length + ' 条。', '', '## 未处理');
+  out.push(open.length ? open.map(line).join('\n') : '（无）');
+  out.push('', '## 已处理');
+  out.push(done.length ? done.map(line).join('\n') : '（无）');
+  return out.join('\n') + '\n';
+}
+
+function download(name, content) {
+  const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function setOpen(open) {
+  document.body.classList.toggle('cm-open', open);
+  $('cm-open').setAttribute('aria-expanded', open ? 'true' : 'false');
+  panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+  if (open) { renderTarget(); renderList(); }
+}
+
+$('cm-open').onclick = () => setOpen(!document.body.classList.contains('cm-open'));
+$('cm-close').onclick = () => setOpen(false);
+$('cm-add').onclick = add;
+$('cm-page').onclick = () => { pageOnly = !pageOnly; renderTarget(); };
+$('cm-export').onclick = () => { download('comments.md', markdown()); say('已导出 Markdown。'); };
+$('cm-reload').onclick = async () => { project = await loadProject(); comments = await loadComments(); renderList(); renderTarget(); say('已重新读取。'); };
+$('cm-text').onkeydown = (event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); add(); } };
+
+if (stage) {
+  new MutationObserver(() => { decorate(); renderTarget(); }).observe(stage, { childList: true, subtree: true });
+  stage.addEventListener('click', () => setTimeout(renderTarget, 0), true);
+}
+if (screensBox) screensBox.addEventListener('click', () => setTimeout(() => { pageOnly = false; renderTarget(); renderList(); }, 0), true);
+
+(async function init() {
+  project = await loadProject();
+  comments = await loadComments();
+  if (!serverMode) {
+    const hint = panel.querySelector('.cm-hint');
+    if (hint) hint.textContent = '离线打开：批注只存这份浏览器草稿，不写文件。写完用「导出 Markdown」交给实现方。';
+  }
+  renderList();
+  renderTarget();
+  say(serverMode ? '批注写入 comments.json' : '离线模式：只存浏览器草稿，可导出 Markdown');
+})();
+})();
+</script></body></html>

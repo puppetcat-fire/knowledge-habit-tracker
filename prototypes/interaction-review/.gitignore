@@ -1,0 +1,3 @@
+server.*.log
+project.json.tmp
+comments.json.tmp

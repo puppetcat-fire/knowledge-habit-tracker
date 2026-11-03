@@ -1,0 +1,4 @@
+interface:
+  display_name: "可编辑交互原型"
+  short_description: "先在浏览器编辑页面、元素和跳转，确认交互后再按原型实现产品"
+  default_prompt: "使用 $editable-prototype，根据原始需求生成可编辑的页面与跳转原型，先让我调整确认。"
