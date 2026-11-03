@@ -9,7 +9,7 @@ By participating in this project, you agree to uphold our [Code of Conduct](CODE
 ## 🐛 Reporting Bugs
 
 If you find a bug, please:
-1. Check if it has already been reported in the [Issues](https://github.com/your-username/knowledge-habit-tracker/issues)
+1. Check if it has already been reported in the [Issues](https://github.com/puppetcat-fire/knowledge-habit-tracker/issues)
 2. If not, create a new issue with:
    - Clear description of the problem
    - Steps to reproduce
@@ -35,10 +35,13 @@ For new features:
 
 ### Development Setup
 ```bash
-git clone https://github.com/your-username/knowledge-habit-tracker.git
+git clone https://github.com/puppetcat-fire/knowledge-habit-tracker.git
 cd knowledge-habit-tracker
-# Make your changes
+npm install
+npm run check   # lint + typecheck + test
 ```
+
+站点结构见 [README](README.md)：首页在 `site/`，习惯记录器在 `/habit/`，知识平台在 `/platform/`。改前端跳转时先看 `server.js` 里的 `PUBLIC_FILES` 白名单。
 
 ### Commit Guidelines
 - Use descriptive commit messages

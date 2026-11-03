@@ -1,24 +1,17 @@
-# 点亮习惯记录器
+# humansneeds.com
 
-一个为知识工作场景准备的习惯与事件记录网页，核心约束是：
+渡鸦大人（[puppetcat-fire](https://github.com/puppetcat-fire)）的个人工具站。
 
-- 用本机服务打开时先注册；习惯、计时、事件和点亮都留在这台机器的账号里
-- 一次只养一个习惯，尽量减少注意力切换
-- 重复事件会自然浮出为“节点候选”，为后续教程化、知识共建做准备
+这里不只是一个习惯记录器：根路径是门面页，把做过的工具收在一起；两个应用挂在子路径下，共用同一套服务、账号和数据目录。INeedThis 是隔壁的独立站点，域名指向 `needs.humansneeds.com`。
 
-## 现在有什么
-
-打开页面先注册或登录。名字和密码只写在这台机器的 `data/` 里。登录之后，习惯页负责计时和事件。知识平台是一棵树，点进节点能看到打卡：一段文字、一张图片，或两者都有。对着节点做完的一次计时也会记在那个节点上。退出在概览页。
-
-- 单习惯养成：同一时间只维护一个激活习惯
-- 事件证据链：手动记录和计时记录都会沉淀为可追溯事件
-- 本地种子树：页面直接读取仓库里的 `seed-trees/` 树数据，计时或手动记录可以挂靠到一个节点
-- 知识共建共享平台：卡片流浏览节点，详情里展开方法，发出你自己的说法
-- 本地点亮草稿：挂靠节点的那次记录会留下一条待发出的说法，由你确认（发出）后保留
-- 节点候选：重复动作自动聚合，方便抽成教程节点
-- 账号数据：通过本机服务使用时，习惯、事件和点亮保存在该账号下，仍只在这台机器，不会发到公网
-- JSON 备份：支持导出和导入本地数据
-- 本机反馈接口：只有你主动启动本地服务时，反馈页才会写本机日志
+| 路径 | 是什么 | 代码 |
+| --- | --- | --- |
+| `/` | 个人主页：工具导航、关于、反馈 | `site/` |
+| `/habit/` | 点亮 · 习惯记录器 | `index.html`、`app.js`、`style.css` |
+| `/platform/` | 知识共建共享平台 | `platform.html`、`platform.js`、`platform.css` |
+| `/api/*` | 账号、状态、记录、节点、反馈 | `server.js` |
+| `/health` | 健康检查 | `server.js` |
+| 旧地址 `/index.html`、`/platform.html`、`:3001` | 301 到新路径 | `server.js` |
 
 ## 快速开始
 
@@ -29,103 +22,86 @@ npm start
 
 打开 [http://127.0.0.1:3000](http://127.0.0.1:3000)。
 
-默认监听 `127.0.0.1`，只允许本机访问。
+默认只监听 `127.0.0.1`，账号、习惯、记录和反馈日志都写在本机的 `data/` 里。
 
-## 可编辑交互原型（先确认页面与跳转）
+> 安装时如果 `electron` 的 postinstall 因为缓存目录权限失败，用 `npm install --ignore-scripts` 即可；只有 `npm run desktop` 需要 electron 的二进制。
 
-正式改页面之前，先在可编辑原型里把页面、状态和点击跳转确认下来：
+## 加一个新工具
 
-```bash
-npm run prototype           # 启动原型编辑器，打开 http://127.0.0.1:3102/
-npm run prototype:check     # 校验原型数据、内嵌数据与批注，并列出没有任何入口的屏
-npm run prototype:comments  # 读回全部批注（--open-only 只看未处理，--json 出原始数据）
-```
+首页的卡片是静态 HTML，改 `site/index.html` 就够了：
 
-- 原型本体：`prototypes/interaction-review/`（16 个页面/状态，画布 600x880，静态跳转边 123 条）
-- 编辑器能力说明：`skill/editable-prototype/SKILL.md`
-- 编辑模式可拖动元素、改文字、设置「点击后跳转到」；「保存到文件」写回 `project.json`，预览模式验证跳转与返回路径
-- 右上角「批注」打开批注侧栏：在画布上点一个元素就能把批注挂到它，也可挂整页；批注写进 `comments.json`，可定位回元素、标记已处理，有批注的元素显示橙色圆点
-- 原型只用模拟数据，不读写真实账号、记录或后端；待机/计时中/战报是界面状态，不是正式导航页
-- 16 屏里 13 屏有点击入口（含运行时才进得去的屏）；`running-stack`、`report` 已被运行时界面取代，`event-graph` 是标注为「非产品页面」的机制说明
+1. 复制一张 `<a class="tool-card" href="...">`，改 `tool-kicker`、标题、描述和链接；
+2. 站内工具用 `/xxx/`，站外工具加 `rel="noopener" target="_blank"`；
+3. 还没上线的用 `<div class="tool-card is-soon">`，不要留空链接；
+4. 如果是新的 Node 应用，在 `server.js` 的 `PUBLIC_FILES` 里加白名单，只放会发出去的文件。
 
-原型是交互契约。改动之后 `npm run prototype:check` 若提示有屏没有任何入口，先确认那是有意留作对照，还是漏了入口。
+新增的站内工具如果也要走 `data/`，直接复用 `/api/*` 和 `state-sync.js` 即可。
 
-## 独立试作（按确认的交互契约重做）
+## 反馈是怎么走的
 
-`prototypes/open-design-trial/` 是按逐轮批注确认下来的流程重做的可运行原型：统一外壳与多级侧边栏、单活动计时与未结束列表、重复笔记/步骤、习惯与事件记录分页、知识图谱与点亮自证、个人主页、结束战报。**它不替换生产页面**，只用模拟数据，也不读写真实账号。
+反馈有两个入口，落点不同：
 
-```bash
-npm run trial        # 打开 http://127.0.0.1:3110/（?reset=1 重置演示数据）
-npm run trial:test   # 域逻辑单测
-npm run trial:check  # 真浏览器跑关键闭环 + 截图 + 控制台错误检查
-```
+- 首页 `/` 的反馈表单、习惯页的「反馈与安全」页
+- 两者都先 `POST /api/bugs`，写进 `data/bug-reports.jsonl`（只有本机/服务器看得到）
+- 如果服务没起、或者是纯静态托管，页面会给出一个已经填好内容的 GitHub Issue 链接（仓库 `puppetcat-fire/knowledge-habit-tracker`，标签 `feedback`），也可以一键复制反馈内容
 
-需求来源、冲突判定、目标流程与验证结果见 [`docs/requirement-flow-review.md`](docs/requirement-flow-review.md)；试作结构与取舍见 [`prototypes/open-design-trial/README.md`](prototypes/open-design-trial/README.md)。
-
-## 桌面悬浮计时窗
-
-如果你需要跨软件全局可见的计时器，用 Electron 桌面模式：
+看最近的反馈：
 
 ```bash
-npm run desktop
+curl http://127.0.0.1:3000/api/bugs
 ```
 
-桌面模式会打开两个窗口：
-
-- 主窗口：完整习惯记录器
-- 悬浮窗：始终置顶的计时窗
-
-快捷键：
-
-- `Ctrl+Shift+T`：显示或隐藏悬浮窗
-- `Ctrl+Shift+H`：唤起主窗口
-
-注意：
-
-- 悬浮窗和 Electron 主窗口共享同一份本地状态
-- 但它们和你平时用的 Chrome/Edge 浏览器不是同一个 `localStorage`
-- 如果你之前已经在浏览器里积累了数据，先用网页版导出 JSON，再在 Electron 主窗口里导入
-
-## Android 常驻小计时条
-
-仓库里新增了一个 Android 原生 MVP：[`android-overlay`](C:/Users/xiaob/Documents/knowledge-habit-tracker/android-overlay/README.md)
-
-它的目标不是取代网页，而是单独验证这件事：
-
-- 安卓上能不能做一个跨 App 常驻的小计时条
-
-当前已经有：
-
-- 悬浮窗权限申请
-- 前台服务
-- 可拖动小计时条
-- 开始 / 暂停 / 重置
-- 当前动作输入
-
-建议直接用 Android Studio 打开 `android-overlay` 目录。
+`/api/bugs` 只返回标题、级别、页面和时间，不返回联系方式、IP 和 User-Agent。
 
 ## 数据边界
 
-### 永远本地的部分
+### 留在浏览器里的
 
-- 激活习惯
-- 历史习惯
-- 事件记录
-- 计时器状态
+- 激活习惯、历史习惯、事件记录、计时器状态
 - 点亮草稿与已确认的点亮
 - 备份导出文件
 
-这些数据都只存在浏览器 `localStorage` 和你导出的 JSON 文件里，不会自动上传。
+### 留在 `data/` 里的
 
-### 离线分发要带上 `seed-trees/`
+- 账号与会话（`users.json`、`sessions.json`）
+- 按账号保存的状态（`states/`）、记录（`records.json`）、个人节点（`custom-nodes.json`）、图片（`media/`）
+- 反馈日志（`bug-reports.jsonl`）
 
-网页是从 `seed-trees/` 读取本地种子树的，离线分发（拷贝文件或 `file://` 直开）时必须一并带上 `seed-trees/`，否则森林功能区会整体隐藏，只保留一期的记录能力。
+`data/` 不在静态白名单里，不会被当成静态资源发出去。习惯记录器本身仍然可以在纯 `file://` 下当作本地沙箱用，但首页和知识平台需要本机服务。
 
-### 只有主动启用服务时才会写磁盘的部分
+### 离线分发
 
-- 反馈页提交的问题日志
+拷贝文件离线用时，要一并带上 `seed-trees/`，否则森林功能区会整体隐藏，只保留一期的记录能力。
 
-它们写入服务端 `data/bug-reports.jsonl`，默认也只在本机可见。
+## 部署到 humansneeds.com
+
+站点没有构建步骤，一个 Node 进程就够：
+
+```bash
+HOST=127.0.0.1 PORT=3000 DATA_DIR=/var/lib/humansneeds node server.js
+```
+
+前面放 Nginx 做 HTTPS，只开 80/443，Node 只监听本机。示例：
+
+- [`deploy/nginx.conf.example`](deploy/nginx.conf.example)：443 反代、www 跳转、HSTS、10MB 请求体
+- [`deploy/humansneeds.service`](deploy/humansneeds.service)：systemd 单元
+- [`Dockerfile`](Dockerfile)：`docker build -t humansneeds . && docker run -p 127.0.0.1:3000:3000 -v humansneeds-data:/data humansneeds`
+
+公网部署时至少要设：
+
+```bash
+HOST=127.0.0.1
+ALLOWED_ORIGINS=https://humansneeds.com,https://www.humansneeds.com
+ENABLE_RATE_LIMIT=true
+TRUST_PROXY=true   # 在 Nginx 后面
+COOKIE_SECURE=true # 上 HTTPS 之后
+```
+
+`ALLOWED_ORIGINS` 只影响 `/api/*` 的写请求。别把 `data/` 挂成静态目录，也别把 `server.js`、测试和文档放进静态白名单。
+
+### INeedThis 放在哪里
+
+INeedThis（[puppetcat-fire/humansneeds](https://github.com/puppetcat-fire/humansneeds)）是独立的 Next.js 应用，有自己的 SQLite 和写冷却，不和本站共用数据。推荐部署在子域名 `needs.humansneeds.com`，首页里已经指向这个地址；换地址只改 `site/index.html` 里那一张卡片的 `href`。
 
 ## 开发检查
 
@@ -135,24 +111,49 @@ npm run typecheck
 npm test
 ```
 
-## 阿里云部署建议
+`npm test` 会跑服务端、前端 jsdom 和试作原型的测试。`npm run check` 是三件一起跑。
 
-如果你后面要把这个项目部署到阿里云，建议把它当成两个边界明确的东西：
+浏览器校验（原型试作那一套）需要一个 Chrome 或 Edge 的本地可执行文件；`scripts/trial-browser-check.cjs` 目前只探测 Windows 路径，Linux 上跑之前要补一条路径。
 
-1. 习惯记录器：继续保持本地沙箱优先，不要一开始就把个人习惯数据塞进公网服务
-2. 知识共建平台：再单独设计账号、权限、审核和共享模型
+## 其它入口
 
-最小部署建议：
+### 可编辑交互原型
 
-- Node 进程只监听内网或 `127.0.0.1`
-- 用 Nginx 做反向代理和 HTTPS
-- 只开放 `/`、`/app.js`、`/style.css`、`/seed-trees/seed-trees.js`、`/health`、`/api/bugs`
-- `data` 目录不要暴露为静态目录
-- 上云前先导出一份 JSON 备份
+```bash
+npm run prototype           # http://127.0.0.1:3102/
+npm run prototype:check     # 校验原型数据和跳转
+npm run prototype:comments  # 读回批注
+```
 
-## 适合下一步补的东西
+### 按交互契约重做的试作
 
-- 把“节点候选”真正升级成可编辑的教程节点
-- 为知识共建平台增加身份、权限和审核流
-- 给事件和节点增加标签、引用、关联材料
-- 如果真要跨设备同步，再单独设计加密和授权，而不是直接上传本地习惯数据
+```bash
+npm run trial        # http://127.0.0.1:3110/（?reset=1 重置）
+npm run trial:test
+npm run trial:check
+```
+
+需求与取舍见 [`docs/requirement-flow-review.md`](docs/requirement-flow-review.md)。
+
+### 桌面悬浮计时窗
+
+```bash
+npm run desktop
+```
+
+主窗口加载 `/habit/`，悬浮窗加载 `/habit/overlay.html`，共用同一份本地状态。浏览器和 Electron 的 `localStorage` 不互通，迁移时先导出 JSON。
+
+### Android 常驻小计时条
+
+[`android-overlay`](android-overlay/README.md) 是一个单独的原生 MVP，用 Android Studio 直接打开。
+
+## 待办
+
+- 拼豆图纸页：上线后把首页 `04 · 手作` 那张卡片换成真实链接
+- INeedThis 子域名 `needs.humansneeds.com` 的证书和反代
+- 知识共建平台的身份、权限和审核流
+- 节点候选升级成可编辑的教程节点
+
+## 许可
+
+MIT，见 [LICENSE](LICENSE)。
