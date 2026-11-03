@@ -9,6 +9,17 @@ describe("the habit page is habit-only", () => {
     expect(document.querySelectorAll(".nav .nav-button")).toHaveLength(4);
   });
 
+  it("links back to the humansneeds.com homepage", () => {
+    loadApp();
+
+    const home = document.querySelector(".nav .nav-home");
+
+    expect(home).not.toBeNull();
+    expect(home.tagName).toBe("A");
+    expect(home.getAttribute("href")).toBe("/");
+    expect(home.textContent).toContain("humansneeds.com");
+  });
+
   it("does not embed the platform shell", () => {
     loadApp();
 
