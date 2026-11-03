@@ -20,6 +20,18 @@ describe("the habit page is habit-only", () => {
     expect(home.textContent).toContain("humansneeds.com");
   });
 
+  it("offers a local guest mode on the account gate", () => {
+    loadApp();
+
+    const gate = document.getElementById("account-gate");
+    const guest = document.getElementById("account-guest");
+
+    expect(gate).not.toBeNull();
+    expect(guest).not.toBeNull();
+    expect(guest.tagName).toBe("BUTTON");
+    expect(gate.contains(guest)).toBe(true);
+  });
+
   it("does not embed the platform shell", () => {
     loadApp();
 

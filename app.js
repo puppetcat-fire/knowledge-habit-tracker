@@ -46,6 +46,8 @@
   let remoteSyncReady = false;
   let stateSync = null;
   let currentUser = null;
+  const GUEST_KEY = "kht:guest";
+  let guestMode = false;
   let activeRange = "all";
   let activePage = "timer";
   let activeRecordTab = "events";
@@ -2284,6 +2286,28 @@
     appBooted = true;
   }
 
+  // 游客模式：不建账号，直接用本机存档。注册/登录后由 enterApp() 接管并同步。
+  function enterGuest() {
+    guestMode = true;
+    try {
+      localStorage.setItem(GUEST_KEY, "1");
+    } catch {}
+    state = loadState();
+    showApp();
+    if (!appBooted) {
+      bootApp();
+      appBooted = true;
+    }
+    syncGuestChrome();
+  }
+
+  function syncGuestChrome() {
+    const logout = document.getElementById("account-logout");
+    if (logout) {
+      logout.textContent = guestMode ? "登录 / 注册" : "退出";
+    }
+  }
+
   async function enterApp() {
     remoteSyncReady = false;
     stateSync = new window.KHTStateSync(currentUser.id);
@@ -2363,6 +2387,7 @@
     const registerButton = document.getElementById("account-mode-register");
     const loginButton = document.getElementById("account-mode-login");
     const logoutButton = document.getElementById("account-logout");
+    const guestButton = document.getElementById("account-guest");
     let mode = "register";
     let busy = false;
 
@@ -2385,6 +2410,10 @@
 
     registerButton.addEventListener("click", () => setMode("register"));
     loginButton.addEventListener("click", () => setMode("login"));
+
+    if (guestButton) {
+      guestButton.addEventListener("click", () => enterGuest());
+    }
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -2409,6 +2438,11 @@
         }
         passwordInput.value = "";
         currentUser = data.user;
+        guestMode = false;
+        try {
+          localStorage.removeItem(GUEST_KEY);
+        } catch {}
+        syncGuestChrome();
         await enterApp();
       } catch (error) {
         showError(error.message || "连接失败，请稍后再试。");
@@ -2420,6 +2454,15 @@
 
     if (logoutButton) {
       logoutButton.addEventListener("click", async () => {
+        if (guestMode) {
+          guestMode = false;
+          try {
+            localStorage.removeItem(GUEST_KEY);
+          } catch {}
+          syncGuestChrome();
+          returnToGate();
+          return;
+        }
         if (stateSync && !(await stateSync.flush())) return;
         try {
           const response = await window.fetch("/api/logout", { method: "POST", credentials: "same-origin" });
@@ -2433,6 +2476,14 @@
     }
 
     setMode("register");
+    let resumingGuest = false;
+    try {
+      resumingGuest = localStorage.getItem(GUEST_KEY) === "1";
+    } catch {}
+    if (resumingGuest) {
+      enterGuest();
+      return;
+    }
     resolveInitialSession();
   }
 
