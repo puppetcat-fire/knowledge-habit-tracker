@@ -61,11 +61,16 @@ docker run -d --name humansneeds \
   humansneeds
 ```
 
-## 6. INeedThis
+## 6. INeedThis（/needs/）
 
-`puppetcat-fire/humansneeds` 是独立的 Next.js 应用，建议放在 `needs.humansneeds.com`，
-单独的 DNS 记录、单独的证书、单独的 SQLite 数据卷。它和本仓不共用 `data/`。
-首页的入口在 `site/index.html` 的 `03 · 需要` 卡片。
+`puppetcat-fire/humansneeds` 是独立的 Next.js 应用，挂在本站同域的 `/needs/` 下：
+
+- 那个应用设 `basePath: "/needs"`，单独跑在 `127.0.0.1:3200`
+- Nginx 的 `/needs/` location 反代到 3200（示例里已经写好）
+- 它有自己的 SQLite 和写冷却，不读写本站的 `data/`
+- 首页入口在 `site/index.html` 的 `03 · 需要` 卡片
+
+如果以后改成子域名，把这一段 location 换成单独的 server 块即可。
 
 ## 备份
 

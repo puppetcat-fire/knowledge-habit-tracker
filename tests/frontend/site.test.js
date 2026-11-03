@@ -34,6 +34,8 @@ describe("the personal site homepage", () => {
 
     expect(document.querySelector('a[href="/habit/"]')).not.toBeNull();
     expect(document.querySelector('a[href="/platform/"]')).not.toBeNull();
+    expect(document.querySelector('a[href="/needs/"]')).not.toBeNull();
+    expect(document.querySelector('a[href="mailto:xiaoboren0@gmail.com"]')).not.toBeNull();
     expect(document.title).toContain("humansneeds");
   });
 
@@ -80,6 +82,10 @@ describe("the personal site homepage", () => {
     expect(link.href).toContain("github.com/puppetcat-fire/knowledge-habit-tracker/issues/new");
     expect(decodeURIComponent(link.href)).toContain("计时器不动了");
     expect(decodeURIComponent(link.href)).toContain("点开始没有反应");
+
+    const mail = document.getElementById("feedback-mail-link");
+    expect(mail.href).toContain("mailto:xiaoboren0@gmail.com");
+    expect(decodeURIComponent(mail.href)).toContain("计时器不动了");
   });
 
   it("keeps a draft in localStorage until it is submitted", async () => {

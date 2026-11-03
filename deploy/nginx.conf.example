@@ -65,15 +65,16 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 60s;
     }
-}
 
-# INeedThis 在隔壁：单独的子域名，单独的数据
-# server {
-#     listen 443 ssl http2;
-#     server_name needs.humansneeds.com;
-#     location / {
-#         proxy_pass http://127.0.0.1:3200;
-#         proxy_set_header Host $host;
-#         proxy_set_header X-Forwarded-Proto $scheme;
-#     }
-# }
+    # INeedThis 挂在同域 /needs/ 下：Next.js 要设 basePath: "/needs"，
+    # 单独跑在 3200，用自己的 SQLite，不和本站共用 data/。
+    location /needs/ {
+        proxy_pass http://127.0.0.1:3200;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+}

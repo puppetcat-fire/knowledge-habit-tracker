@@ -101,7 +101,15 @@ COOKIE_SECURE=true # 上 HTTPS 之后
 
 ### INeedThis 放在哪里
 
-INeedThis（[puppetcat-fire/humansneeds](https://github.com/puppetcat-fire/humansneeds)）是独立的 Next.js 应用，有自己的 SQLite 和写冷却，不和本站共用数据。推荐部署在子域名 `needs.humansneeds.com`，首页里已经指向这个地址；换地址只改 `site/index.html` 里那一张卡片的 `href`。
+INeedThis（[puppetcat-fire/humansneeds](https://github.com/puppetcat-fire/humansneeds)）是独立的 Next.js 应用，有自己的 SQLite 和写冷却，不和本站共用数据。
+
+它挂在同域的 `humansneeds.com/needs/` 下：
+
+- 那个应用设 `basePath: "/needs"`，单独跑在 `127.0.0.1:3200`
+- Nginx 把 `/needs/` 反代到 3200，`/` 仍然给本站（见 `deploy/nginx.conf.example`）
+- 首页的入口是 `site/index.html` 里的 `03 · 需要` 卡片，指向 `/needs/`
+
+换成子域名部署的话，改这一个 `href` 和 Nginx 的 `server_name` 即可。
 
 ## 开发检查
 
@@ -149,8 +157,8 @@ npm run desktop
 
 ## 待办
 
-- 拼豆图纸页：上线后把首页 `04 · 手作` 那张卡片换成真实链接
-- INeedThis 子域名 `needs.humansneeds.com` 的证书和反代
+- 拼豆图纸页：给我地址后，把首页 `04 · 手作` 那张卡片换成真实链接
+- INeedThis 的 `basePath: "/needs"` 和 3200 端口反代要跟着一起部署
 - 知识共建平台的身份、权限和审核流
 - 节点候选升级成可编辑的教程节点
 

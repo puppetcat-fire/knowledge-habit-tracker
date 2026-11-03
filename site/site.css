@@ -426,6 +426,11 @@ a.tool-card:hover .tool-arrow {
   margin-top: 14px;
 }
 
+.feedback-contact {
+  margin-top: 18px;
+  font-size: 13.5px;
+}
+
 .feedback-status {
   display: inline-flex;
   align-items: center;

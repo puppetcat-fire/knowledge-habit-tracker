@@ -2,6 +2,7 @@
   "use strict";
 
   const REPO = "puppetcat-fire/knowledge-habit-tracker";
+  const FEEDBACK_EMAIL = "xiaoboren0@gmail.com";
   const DRAFT_KEY = "humansneeds-feedback-draft";
   const MAX_ISSUE_BODY = 6000;
 
@@ -25,6 +26,7 @@
   const fallback = document.getElementById("feedback-fallback");
   const issueLink = document.getElementById("feedback-issue-link");
   const copyButton = document.getElementById("feedback-copy");
+  const mailLink = document.getElementById("feedback-mail-link");
   const submitButton = document.getElementById("feedback-submit");
   const health = document.getElementById("feedback-health");
   const healthText = document.getElementById("feedback-health-text");
@@ -157,6 +159,19 @@
     if (issueLink) {
       issueLink.href = buildIssueUrl(payload);
     }
+    if (mailLink) {
+      mailLink.href = buildMailtoUrl(payload);
+    }
+  }
+
+  function buildMailtoUrl(payload) {
+    const body = [
+      payload.description,
+      "",
+      `联系方式：${payload.contact || "未填写"}`,
+      `来源：${window.location.origin}${window.location.pathname}`
+    ].join("\n");
+    return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(payload.title)}&body=${encodeURIComponent(body)}`;
   }
 
   function buildIssueUrl(payload) {
