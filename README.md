@@ -31,6 +31,37 @@ npm start
 
 默认监听 `127.0.0.1`，只允许本机访问。
 
+## 可编辑交互原型（先确认页面与跳转）
+
+正式改页面之前，先在可编辑原型里把页面、状态和点击跳转确认下来：
+
+```bash
+npm run prototype           # 启动原型编辑器，打开 http://127.0.0.1:3102/
+npm run prototype:check     # 校验原型数据、内嵌数据与批注，并列出没有任何入口的屏
+npm run prototype:comments  # 读回全部批注（--open-only 只看未处理，--json 出原始数据）
+```
+
+- 原型本体：`prototypes/interaction-review/`（16 个页面/状态，画布 600x880，静态跳转边 123 条）
+- 编辑器能力说明：`skill/editable-prototype/SKILL.md`
+- 编辑模式可拖动元素、改文字、设置「点击后跳转到」；「保存到文件」写回 `project.json`，预览模式验证跳转与返回路径
+- 右上角「批注」打开批注侧栏：在画布上点一个元素就能把批注挂到它，也可挂整页；批注写进 `comments.json`，可定位回元素、标记已处理，有批注的元素显示橙色圆点
+- 原型只用模拟数据，不读写真实账号、记录或后端；待机/计时中/战报是界面状态，不是正式导航页
+- 16 屏里 13 屏有点击入口（含运行时才进得去的屏）；`running-stack`、`report` 已被运行时界面取代，`event-graph` 是标注为「非产品页面」的机制说明
+
+原型是交互契约。改动之后 `npm run prototype:check` 若提示有屏没有任何入口，先确认那是有意留作对照，还是漏了入口。
+
+## 独立试作（按确认的交互契约重做）
+
+`prototypes/open-design-trial/` 是按逐轮批注确认下来的流程重做的可运行原型：统一外壳与多级侧边栏、单活动计时与未结束列表、重复笔记/步骤、习惯与事件记录分页、知识图谱与点亮自证、个人主页、结束战报。**它不替换生产页面**，只用模拟数据，也不读写真实账号。
+
+```bash
+npm run trial        # 打开 http://127.0.0.1:3110/（?reset=1 重置演示数据）
+npm run trial:test   # 域逻辑单测
+npm run trial:check  # 真浏览器跑关键闭环 + 截图 + 控制台错误检查
+```
+
+需求来源、冲突判定、目标流程与验证结果见 [`docs/requirement-flow-review.md`](docs/requirement-flow-review.md)；试作结构与取舍见 [`prototypes/open-design-trial/README.md`](prototypes/open-design-trial/README.md)。
+
 ## 桌面悬浮计时窗
 
 如果你需要跨软件全局可见的计时器，用 Electron 桌面模式：
