@@ -9,15 +9,16 @@ describe("the habit page is habit-only", () => {
     expect(document.querySelectorAll(".nav .nav-button")).toHaveLength(4);
   });
 
-  it("links back to the humansneeds.com homepage", () => {
+  it("carries the site brand as the way back to the homepage", () => {
     loadApp();
 
-    const home = document.querySelector(".nav .nav-home");
+    const brand = document.querySelector(".app-bar .app-brand");
 
-    expect(home).not.toBeNull();
-    expect(home.tagName).toBe("A");
-    expect(home.getAttribute("href")).toBe("/");
-    expect(home.textContent).toContain("humansneeds.com");
+    expect(brand).not.toBeNull();
+    expect(brand.tagName).toBe("A");
+    expect(brand.getAttribute("href")).toBe("/");
+    expect(brand.textContent).toContain("humansneeds.com");
+    expect(document.querySelector(".app-bar .app-title").textContent).toContain("习惯记录器");
   });
 
   it("offers a local guest mode on the account gate", () => {

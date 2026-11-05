@@ -30,6 +30,17 @@ describe("server", () => {
     expect(response.text).toContain('href="/platform/"');
   });
 
+  it("serves the tools shelf and the perler tool from the repository", async () => {
+    const index = await request(app).get("/tools/");
+    expect(index.status).toBe(200);
+    expect(index.text).toContain("小工具");
+    expect(index.text).toContain('href="/tools/perler-beads/"');
+
+    const perler = await request(app).get("/tools/perler-beads/");
+    expect(perler.status).toBe(200);
+    expect(perler.text).toContain("拼豆");
+  });
+
   it("serves the habit tracker under /habit/", async () => {
     const response = await request(app).get("/habit/");
     expect(response.status).toBe(200);
