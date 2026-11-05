@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小工具 · humansneeds</title>
+    <meta name="description" content="顺手做的小工具和测试：拼豆图纸、待办、MBTI、灵魂宠物、诡秘途径、调香师、封面生成、主观深聊。" />
+    <meta name="theme-color" content="#f4f0e6" />
+    <link rel="canonical" href="https://humansneeds.com/tools/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/site.css" />
+    <style>
+      .tools-main {
+        max-width: 860px;
+        padding-top: 40px;
+      }
+
+      .tools-head {
+        margin-bottom: 30px;
+      }
+
+      .tools-head h1 {
+        font-size: clamp(30px, 4.4vw, 44px);
+        margin-bottom: 12px;
+      }
+
+      .tools-head p {
+        color: var(--muted);
+        max-width: 46ch;
+      }
+
+      .tool-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .tool-item {
+        display: grid;
+        gap: 6px;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--panel);
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .tool-item:hover,
+      .tool-item:focus-visible {
+        border-color: var(--line-strong);
+        background: #fffdf9;
+      }
+
+      .tool-item .name {
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .tool-item .desc {
+        color: var(--muted);
+        font-size: 13.5px;
+        line-height: 1.6;
+      }
+
+      .tool-item .tag {
+        justify-self: start;
+        margin-top: 2px;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: var(--primary-soft);
+        color: var(--primary-strong);
+        font-size: 11.5px;
+      }
+
+      .tools-foot {
+        margin-top: 34px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      @media (max-width: 620px) {
+        .tool-list {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="humansneeds 首页">
+        <span class="brand-mark" aria-hidden="true">◐</span>
+        <span class="brand-text">humansneeds<span class="brand-dot">.</span>com</span>
+      </a>
+      <nav class="site-nav" aria-label="主导航">
+        <a href="/#tools">工具</a>
+        <a href="/#about">关于</a>
+        <a href="/#feedback">反馈</a>
+      </nav>
+    </header>
+
+    <main class="tools-main">
+      <header class="tools-head">
+        <p class="eyebrow">小工具</p>
+        <h1>顺手做的东西</h1>
+        <p>都是纯前端，打开就能用，不登录、不上传。做完一个放一个，没做完的就不放上来。</p>
+      </header>
+
+      <div class="tool-list">
+        <a class="tool-item" href="/tools/perler-beads/">
+          <span class="name">拼豆图纸</span>
+          <span class="desc">上传一张图，摊成能照着摆的拼豆图纸，颜色会自动数好数量。</span>
+          <span class="tag">工具</span>
+        </a>
+        <a class="tool-item" href="/tools/beads-community.html">
+          <span class="name">拼豆社区</span>
+          <span class="desc">看别人排的图纸，也能把自己刚生成的那张贴上去。</span>
+          <span class="tag">社区</span>
+        </a>
+        <a class="tool-item" href="/tools/todo.html">
+          <span class="name">待办清单</span>
+          <span class="desc">最小可用的一张待办，写下来就行，不用注册。</span>
+          <span class="tag">效率</span>
+        </a>
+        <a class="tool-item" href="/tools/mbti-test.html">
+          <span class="name">MBTI 人格测试</span>
+          <span class="desc">8 道情境题，测出你的四字母人格类型。</span>
+          <span class="tag">测试</span>
+        </a>
+        <a class="tool-item" href="/tools/soul-pet-test.html">
+          <span class="name">灵魂宠物</span>
+          <span class="desc">8 道情境题，测出你骨子里是哪只小动物。</span>
+          <span class="tag">测试</span>
+        </a>
+        <a class="tool-item" href="/tools/pathway-test.html">
+          <span class="name">诡秘途径测试</span>
+          <span class="desc">8 道情境题，测出你属于《诡秘之主》的哪条途径。</span>
+          <span class="tag">测试</span>
+        </a>
+        <a class="tool-item" href="/tools/perfumer-choice.html">
+          <span class="name">灵魂调香师</span>
+          <span class="desc">8 道情境题，测出你的灵魂香气。</span>
+          <span class="tag">测试</span>
+        </a>
+        <a class="tool-item" href="/tools/cover-generator.html">
+          <span class="name">封面生成</span>
+          <span class="desc">给文章配一张能直接用的封面图。</span>
+          <span class="tag">生成器</span>
+        </a>
+        <a class="tool-item" href="/tools/subjective-deep.html">
+          <span class="name">主观深聊</span>
+          <span class="desc">40 多个主题，答完由模型判卷，出一份只属于你的结果。</span>
+          <span class="tag">测试</span>
+        </a>
+      </div>
+
+      <p class="tools-foot">
+        想找正经的工具，回 <a href="/">首页</a>；源码都在
+        <a href="https://github.com/puppetcat-fire" rel="noopener" target="_blank">GitHub</a>。
+      </p>
+    </main>
+
+    <footer class="site-footer">
+      <p><span>2026</span> · humansneeds.com · 渡鸦大人</p>
+      <p class="footer-links">
+        <a href="/">首页</a>
+        <a href="https://github.com/puppetcat-fire" rel="noopener" target="_blank">GitHub</a>
+        <a href="mailto:xiaoboren0@gmail.com">写信</a>
+      </p>
+    </footer>
+  </body>
+</html>
