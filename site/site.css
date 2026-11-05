@@ -153,11 +153,11 @@ code {
 }
 
 @media (min-width: 1024px) {
-  body {
+  body.has-rail {
     padding-left: 224px;
   }
 
-  .site-rail {
+  .has-rail .site-rail {
     position: fixed;
     inset: 0 auto 0 0;
     width: 224px;
@@ -170,7 +170,8 @@ code {
     overflow-y: auto;
   }
 
-  .site-header .site-nav {
+  /* 侧边栏已经有品牌和章节导航，页头在大屏上就不重复了 */
+  .has-rail .site-header {
     display: none;
   }
 }
@@ -465,43 +466,6 @@ a.tool-card:focus-visible {
 a.tool-card:hover .tool-arrow {
   transform: translateX(3px);
   color: var(--primary);
-}
-
-.mini-tools {
-  margin-top: 34px;
-  padding-top: 26px;
-  border-top: 1px dashed var(--line);
-}
-
-.mini-tools h3 {
-  font-size: 18px;
-  margin-bottom: 14px;
-}
-
-.mini-tools ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.mini-tools a {
-  display: inline-block;
-  padding: 7px 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--panel);
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 13.5px;
-}
-
-.mini-tools a:hover,
-.mini-tools a:focus-visible {
-  border-color: var(--line-strong);
-  color: var(--text);
 }
 
 .about {
