@@ -1,6 +1,5 @@
 (function bootstrapApp() {
   const STORAGE_KEY = "knowledge-habit-tracker";
-  const BUG_CACHE_KEY = "knowledge-habit-tracker-bugs";
   const CUSTOM_NODES_KEY = "knowledge-habit-custom-nodes";
   const CUSTOM_HABIT_NAME = "自由记录";
   const MAX_BUG_CACHE = 20;
@@ -53,7 +52,11 @@
   let activeRecordTab = "events";
   let timerInterval = null;
   let lastTimerPersist = 0;
-  let currentBugList = getCachedBugs();
+  let currentBugList = [];
+  let bugSession = 0;
+  try {
+    window.localStorage.removeItem("knowledge-habit-tracker-bugs");
+  } catch { /* 旧缓存可能不可访问 */ }
   let modalContext = null;
   let seedTrees = [];
   let nodeIndex = new Map();
@@ -1229,6 +1232,8 @@
   }
 
   async function submitBugReport() {
+    const session = bugSession;
+    const accountId = guestMode || LOCAL_ONLY ? null : currentUser?.id;
     const payload = {
       title: elements.bugTitleInput.value.trim(),
       description: elements.bugDescriptionInput.value.trim(),
@@ -1243,7 +1248,8 @@
       showMessage(elements.bugStatus, "标题和问题描述是必填项。", false);
       return;
     }
-    const result = await submitBug(payload);
+    const result = await submitBug(payload, accountId);
+    if (session !== bugSession) return;
     if (!result.ok) {
       showMessage(elements.bugStatus, result.message || "提交失败，请稍后重试。", false);
       if (result.issueUrl) {
@@ -1255,17 +1261,18 @@
     showMessage(elements.bugStatus, result.message || "问题反馈已提交。", true);
     if (result.bug) {
       currentBugList = mergeBugLists([result.bug], currentBugList);
-      cacheBugs(currentBugList);
       renderBugList(currentBugList);
     }
   }
 
-  async function submitBug(payload) {
+  async function submitBug(payload, accountId) {
     try {
       const response = await window.fetch("/api/bugs", {
         method: "POST",
+        credentials: accountId ? "same-origin" : "omit",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...(accountId ? { "X-Feedback-Account": accountId } : {})
         },
         body: JSON.stringify(payload)
       });
@@ -1330,18 +1337,26 @@
   }
 
   async function loadRemoteBugs() {
+    if (!currentUser || guestMode || LOCAL_ONLY) return;
+    const session = bugSession;
+    const accountId = currentUser.id;
     try {
-      const response = await window.fetch("/api/bugs");
+      const response = await window.fetch("/api/bugs", { credentials: "same-origin", cache: "no-store" });
+      if (session !== bugSession) return;
       if (!response.ok) {
+        if (response.status === 401) resetBugList();
         return;
       }
       const data = await response.json();
-      currentBugList = mergeBugLists(data.bugs || [], getCachedBugs());
-      cacheBugs(currentBugList);
+      if (session !== bugSession) return;
+      if (data.accountId !== accountId) {
+        resetBugList();
+        return;
+      }
+      currentBugList = mergeBugLists(data.bugs || [], currentBugList);
       renderBugList(currentBugList);
     } catch {
-      currentBugList = getCachedBugs();
-      renderBugList(currentBugList);
+      // 保留当前会话已确认的反馈，等待下次打开时重试。
     }
   }
 
@@ -2128,21 +2143,15 @@
     stateSync.queue(state);
   }
 
-  function getCachedBugs() {
-    try {
-      const raw = window.localStorage.getItem(BUG_CACHE_KEY);
-      if (!raw) {
-        return [];
-      }
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
-    } catch {
-      return [];
+  function resetBugList() {
+    bugSession += 1;
+    currentBugList = [];
+    elements.bugForm?.reset();
+    if (elements.bugStatus) {
+      elements.bugStatus.textContent = "";
+      elements.bugStatus.classList.add("hidden");
     }
-  }
-
-  function cacheBugs(bugs) {
-    window.localStorage.setItem(BUG_CACHE_KEY, JSON.stringify(bugs.slice(0, MAX_BUG_CACHE)));
+    renderBugList(currentBugList);
   }
 
   function mergeBugLists(primary, secondary) {
@@ -2323,6 +2332,7 @@
 
   // 游客模式：不建账号，直接用本机存档。注册/登录后由 enterApp() 接管并同步。
   function enterGuest() {
+    resetBugList();
     guestMode = true;
     try {
       localStorage.setItem(GUEST_KEY, "1");
@@ -2344,6 +2354,7 @@
   }
 
   async function enterApp() {
+    resetBugList();
     remoteSyncReady = false;
     stateSync = new window.KHTStateSync(currentUser.id);
     const nextState = await stateSync.load();
@@ -2363,9 +2374,11 @@
     // 启动加载本身不写服务端，等用户第一次改动再同步
     remoteSyncReady = true;
     if (stateSync.pending) void stateSync.flush();
+    if (activePage === "bug") void loadRemoteBugs();
   }
 
   function returnToGate() {
+    resetBugList();
     remoteSyncReady = false;
     const passwordInput = document.getElementById("account-password");
     if (passwordInput) {

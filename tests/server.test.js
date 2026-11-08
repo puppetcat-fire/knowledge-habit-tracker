@@ -216,36 +216,33 @@ describe("server", () => {
   });
 
   it("stores bug reports after validation and hides private fields from listing", async () => {
-    const createResponse = await request(app).post("/api/bugs").send({
+    const first = request.agent(app);
+    const second = request.agent(app);
+    const registered = await first.post("/api/register").send({ name: "feedback-first", password: "test-password" }).expect(201);
+    await second.post("/api/register").send({ name: "feedback-second", password: "test-password" }).expect(201);
+    const payload = {
       title: "<script>alert(1)</script> 本地问题",
       description: "页面切换后没有提示",
       contact: "me@example.com",
       severity: "high",
       page: "bug"
-    });
+    };
+    const createResponse = await first.post("/api/bugs").send(payload);
 
     expect(createResponse.status).toBe(200);
     expect(createResponse.body.ok).toBe(true);
     expect(createResponse.body.bug.title).toBe("scriptalert(1)/script 本地问题");
 
-    // A report from another address must not be listed back to this one.
-    fs.appendFileSync(
-      path.join(tempDir, "bug-reports.jsonl"),
-      `${JSON.stringify({
-        id: "someone-else",
-        title: "别人的反馈",
-        severity: "low",
-        page: "site",
-        ip: "203.0.113.9",
-        createdAt: new Date().toISOString()
-      })}\n`,
-      "utf8"
-    );
-
-    const listResponse = await request(app).get("/api/bugs");
+    await second.post("/api/bugs").send({ ...payload, title: "同一 IP 的另一个账号" }).expect(200);
+    await request(app).post("/api/bugs").send({ ...payload, title: "同一 IP 的游客" }).expect(200);
+    await request(app).get("/api/bugs").expect(401);
+    await second.post("/api/bugs").set("X-Feedback-Account", registered.body.user.id).send(payload).expect(409);
+    const listResponse = await first.get("/api/bugs");
     expect(listResponse.status).toBe(200);
+    expect(listResponse.headers["cache-control"]).toBe("no-store");
     expect(listResponse.body.bugs).toHaveLength(1);
     expect(listResponse.body.bugs[0].title).toBe("scriptalert(1)/script 本地问题");
     expect(listResponse.body.bugs[0].contact).toBeUndefined();
+    expect((await second.get("/api/bugs")).body.bugs.map((bug) => bug.title)).toEqual(["同一 IP 的另一个账号"]);
   });
 });

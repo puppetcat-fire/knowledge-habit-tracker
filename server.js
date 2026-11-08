@@ -145,11 +145,12 @@ function createApp(overrides = {}) {
   });
 
   app.get("/api/bugs", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     try {
-      // Feedback is anonymous, so a visitor only gets back the reports sent from their own
-      // address. Listing every report let anyone read other people's titles.
+      const user = authenticate(config, req);
+      if (!user) return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
       const bugs = readBugReports(config.bugLogPath)
-        .filter((bug) => bug.ip === req.ip)
+        .filter((bug) => bug.userId === user.id)
         .map((bug) => ({
           id: bug.id,
           title: bug.title,
@@ -157,13 +158,14 @@ function createApp(overrides = {}) {
           page: bug.page,
           createdAt: bug.createdAt
         }));
-      res.json({ ok: true, bugs });
+      res.json({ ok: true, accountId: user.id, bugs });
     } catch (error) {
       handleServerError(res, error);
     }
   });
 
   app.post("/api/bugs", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     const validation = validateBugPayload(req.body);
     if (!validation.ok) {
       return res.status(400).json({
@@ -190,6 +192,12 @@ function createApp(overrides = {}) {
     };
 
     try {
+      const user = authenticate(config, req);
+      const expectedAccount = req.get("X-Feedback-Account");
+      if (expectedAccount && expectedAccount !== user?.id) {
+        return res.status(409).json({ ok: false, message: "登录账号已变化，请刷新后重新提交反馈。" });
+      }
+      report.userId = user?.id || null;
       fs.mkdirSync(config.dataDir, { recursive: true });
       fs.appendFileSync(config.bugLogPath, `${JSON.stringify(report)}\n`, "utf8");
       return res.json({

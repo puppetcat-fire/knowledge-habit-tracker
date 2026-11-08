@@ -50,13 +50,9 @@ npm start
 - 两者都先 `POST /api/bugs`，写进 `data/bug-reports.jsonl`（只有本机/服务器看得到）
 - 如果服务没起、或者是纯静态托管，页面会给出一个已经填好内容的 GitHub Issue 链接（仓库 `puppetcat-fire/knowledge-habit-tracker`，标签 `feedback`），也可以一键复制反馈内容
 
-看最近的反馈：
+登录后可在习惯页查看自己提交的近期反馈。
 
-```bash
-curl http://127.0.0.1:3000/api/bugs
-```
-
-`/api/bugs` 只返回标题、级别、页面和时间，不返回联系方式、IP 和 User-Agent。
+`GET /api/bugs` 需要登录，只列出当前账号提交的标题、级别、页面和时间。旧匿名反馈与游客反馈留在服务端日志，供维护者查看。
 
 ## 数据边界
 
