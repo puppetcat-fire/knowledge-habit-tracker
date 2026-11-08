@@ -5,12 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="知识共建共享平台：节点上挂的是人真正做过的一次。" />
     <title>知识共建共享平台</title>
+    <meta name="theme-color" content="#101e32" />
     <link rel="stylesheet" href="platform.css" />
   </head>
   <body>
+    <a class="skip-link" href="#atlas-stage">跳到知识图谱</a>
+    <div id="save-status" class="save-status hidden" role="status" aria-live="polite">
+      <span id="save-status-message"></span>
+      <button id="save-retry" type="button" hidden>重试保存</button>
+      <button id="save-export" type="button" hidden>导出未保存记录</button>
+      <button id="save-reload" type="button" hidden>读取已保存版本</button>
+    </div>
     <section id="account-gate" class="account-gate" aria-label="账号">
       <div class="account-card">
-        <p class="eyebrow">Knowledge Commons</p>
+        <p class="eyebrow">点亮知识平台</p>
         <h1>知识共建共享平台</h1>
         <p class="account-lead">节点上挂的是人真正做过的一次。</p>
         <form id="account-form" class="form">
@@ -18,6 +26,7 @@
             <span>名字</span>
             <input
               id="account-name"
+              name="username"
               type="text"
               maxlength="24"
               autocomplete="username"
@@ -28,6 +37,7 @@
             <span>密码</span>
             <input
               id="account-password"
+              name="password"
               type="password"
               maxlength="72"
               autocomplete="new-password"
@@ -46,24 +56,55 @@
 
     <div id="platform-root" class="platform-root hidden">
       <header class="platform-bar">
-        <h1 class="platform-title">知识共建共享平台</h1>
+        <h1 class="platform-title"><span class="brand-mark" aria-hidden="true"></span><span>点亮 <small>知识共建共享平台</small></span></h1>
         <div class="platform-bar-actions">
+          <button class="link-button" type="button" data-action="atlas-home">知识图谱</button>
+          <button id="profile-entry" class="link-button" type="button" data-action="profile-open">个人主页</button>
+          <select id="tree-select" aria-label="知识树"></select>
+          <details class="workspace-tools"><summary>管理</summary><div class="workspace-menu">
+          <button class="link-button" type="button" data-action="tree-create">新建知识树</button>
           <button id="node-create" class="link-button" type="button" data-action="platform-create-open">新建节点</button>
-          <a class="platform-link" href="http://127.0.0.1:3000/">习惯记录</a>
+          <details class="backup-tools"><summary>备份</summary><div class="backup-menu">
+            <button id="account-backup-export" class="ghost-button" type="button">导出完整账户备份</button>
+            <label class="field"><span>选择完整账户备份</span><input id="account-backup-file" type="file" accept="application/json,.json"></label>
+            <p id="account-backup-status" class="detail-meta hidden" role="status"></p><button id="account-backup-confirm" class="primary" type="button" hidden>确认恢复为私人内容</button>
+          </div></details>
           <button id="account-logout" class="link-button" type="button">退出</button>
+          </div></details>
+          <a class="platform-link" href="/habit/">习惯记录</a>
+          <a id="platform-community-link" class="platform-link hidden" href="/review/">知识社区</a>
+          <a class="platform-link" href="product.html?view=wants">我的想要</a>
+          <a class="platform-link" href="product.html?view=discover">需求搜索</a>
+          <a class="platform-link" href="product.html?view=tutorial-search">教程搜索</a>
+          <a class="platform-link" href="product.html?view=practice">发现实践</a>
+          <a class="platform-link" href="product.html?view=practice-bookmarks">实践收藏</a>
+          <a id="platform-practice-replies" class="platform-link" href="product.html?view=practice-replies">收到的留言与回复</a>
+          <a class="platform-link" href="/">站点首页</a>
         </div>
       </header>
 
-      <main class="platform-stage">
+      <section id="atlas-intro" class="atlas-intro" aria-label="知识与实践">
+        <div><p class="eyebrow">知识与实践的地图</p><h2>从理解，到做到。</h2><p class="atlas-lead">沿着知识的关联探索，把一次真实实践留在路径上。</p></div>
+        <div id="atlas-stats" class="atlas-stats"></div>
+      </section>
+      <section id="personal-home" class="personal-home hidden" aria-label="个人主页" tabindex="-1"></section>
+
+      <section id="next-action" class="next-action hidden" aria-label="接下来五分钟"></section>
+      <main id="atlas-stage" class="platform-stage" tabindex="-1">
         <section id="platform-feed" class="platform-feed"></section>
-        <aside id="platform-detail" class="platform-detail hidden" aria-label="节点详情">
+        <aside id="platform-detail" class="platform-detail hidden" aria-label="节点详情" tabindex="-1">
           <button id="platform-detail-back" class="link-button" type="button">回到树</button>
           <div id="platform-detail-body" class="detail-body"></div>
         </aside>
       </main>
     </div>
 
+    <script src="runtime-config.js"></script>
     <script src="seed-trees/seed-trees.js"></script>
+    <script src="state-sync.js"></script>
+    <script src="product-rules.js"></script>
+    <script src="account-backup.js"></script>
     <script src="platform.js"></script>
+    <script src="personal-home.js"></script>
   </body>
 </html>

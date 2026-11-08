@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Humans Needs</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f4f7fa; color: #132e42; font: 1rem/1.6 "Microsoft YaHei UI", system-ui, sans-serif; }
+    main { width: min(70rem, calc(100% - 2rem)); margin: clamp(2rem, 8vw, 7rem) auto; }
+    h1 { margin: 0; font: 600 clamp(2.4rem, 8vw, 5.4rem)/1.1 Georgia, serif; }
+    .intro { margin: .75rem 0 2rem; color: #395469; }
+    nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    a { min-width: 0; padding: clamp(1.4rem, 4vw, 3rem); display: block; color: inherit; text-decoration: none; }
+    a:focus-visible { outline: 3px solid #176784; outline-offset: 4px; z-index: 1; }
+    .habit { background: #dce8f4; }
+    .platform { background: #16383a; color: #eaf7f1; }
+    svg { display: block; width: 100%; height: 6rem; margin-bottom: 2rem; }
+    h2 { margin: 0; font-size: clamp(1.4rem, 3vw, 2rem); }
+    a p { margin: .45rem 0 0; }
+    a:hover h2 { text-decoration: underline; text-underline-offset: .25em; }
+    @media (max-width: 42rem) { nav { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Humans Needs</h1>
+    <p class="intro">记录今天做的事，和别人一起积累做事的方法。</p>
+    <nav aria-label="站点导航">
+      <a class="habit" href="/habit/">
+        <svg viewBox="0 0 300 96" preserveAspectRatio="xMinYMid meet" aria-hidden="true">
+          <path d="M2 72H298 M2 64V80 M76 64V80 M150 64V80 M224 64V80 M298 64V80" stroke="currentColor" fill="none"/>
+          <path d="M22 45H95 M104 45H138 M150 45H259" stroke="#176784" stroke-width="10" stroke-linecap="round"/>
+        </svg>
+        <h2>时间与习惯管理</h2>
+        <p>开始计时，养成习惯，回看做过的事。</p>
+      </a>
+      <a class="platform" href="/platform/">
+        <svg viewBox="0 0 300 96" preserveAspectRatio="xMinYMid meet" aria-hidden="true">
+          <path d="M15 76L92 48 159 65 234 22 M92 48L139 17 M159 65L265 77" stroke="#87c5ad" fill="none"/>
+          <g fill="#d9f4e7"><circle cx="15" cy="76" r="5"/><circle cx="92" cy="48" r="8"/><circle cx="139" cy="17" r="4"/><circle cx="159" cy="65" r="6"/><circle cx="234" cy="22" r="9"/><circle cx="265" cy="77" r="5"/></g>
+        </svg>
+        <h2>点亮知识平台</h2>
+        <p>探索知识节点，试用教程，分享实践。</p>
+      </a>
+    </nav>
+  </main>
+</body>
+</html>

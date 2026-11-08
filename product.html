@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>商品详情 · 点亮</title>
+  <style>
+    body { margin: 0; color: #e8f4ed; background: #152d2b; font: 1rem/1.65 "Microsoft YaHei UI", system-ui, sans-serif; }
+    main { width: min(48rem, calc(100% - 2.5rem)); margin: clamp(2rem, 8vw, 6rem) auto; }
+    nav { display: flex; flex-wrap: wrap; gap: 1rem; }
+    a { color: #a5e1c1; text-underline-offset: .2em; }
+    a:focus-visible { outline: 2px solid #a5e1c1; outline-offset: 4px; }
+    h1 { overflow-wrap: anywhere; font-size: clamp(1.9rem, 7vw, 3.5rem); margin-bottom: .25em; }
+    section { margin-top: 2rem; border-top: 1px solid #65837b; }
+    #source-method { white-space: pre-wrap; overflow-wrap: anywhere; }
+    input, button, select { font: inherit; margin: .25rem; }
+    .practice-result { margin: 1rem 0; padding-bottom: 1rem; border-bottom: 1px solid #65837b; }
+    .practice-result p { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .practice-result img { display: block; max-width: min(100%, 16rem); max-height: 16rem; margin: .5rem 0; object-fit: contain; }
+    .practice-result > a:last-of-type { margin-inline-start: .25rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <nav aria-label="站点导航"><a href="/">站点首页</a><a href="/habit/">习惯记录</a><a href="./">点亮知识平台</a><a id="product-community-link" href="/review/" hidden>知识社区</a><a href="?view=wants">我的想要</a></nav>
+    <h1 id="product-title">商品详情</h1>
+    <p id="product-status" role="status">正在读取教程材料…</p>
+    <p id="product-login" hidden><a>登录后返回此页</a></p>
+    <div id="product-content" hidden>
+      <p id="product-usage"></p>
+      <a id="seller-link" target="_blank" rel="noopener noreferrer sponsored">查看商家商品</a>
+      <p>这是教程作者提供的推广链接，可能产生抽成。</p>
+      <section aria-labelledby="source-title">
+        <h2 id="source-title">关联教程</h2>
+        <p id="source-method"></p>
+        <a id="source-link">打开这个教程版本</a>
+      </section>
+      <section aria-labelledby="want-title">
+        <h2 id="want-title">我的想要</h2>
+        <form id="want-form" hidden>
+          <label>预算（元） <input id="want-budget" inputmode="decimal" required></label>
+          <button type="submit">保存为私人预算</button>
+          <button id="want-publish" type="button" hidden>公开预算</button>
+          <button id="want-retract" type="button" hidden>撤回公开</button>
+        </form>
+        <p id="want-status" role="status"></p>
+        <p id="want-shared"></p>
+      </section>
+    </div>
+    <ul id="want-list" hidden></ul>
+    <section id="practice-detail" hidden aria-label="实践内容">
+      <a href="?view=practice">浏览公开实践</a>
+      <a href="?view=practice-bookmarks">查看我的实践收藏</a>
+      <a id="practice-mine-back" href="?view=practice&amp;scope=mine" hidden>查看我的实践</a>
+      <button id="practice-copy-link" type="button" hidden>复制实践链接</button>
+      <button id="practice-bookmark" type="button" hidden>收藏实践</button>
+      <label id="practice-copy-fallback" hidden>实践链接 <input type="url" readonly></label>
+      <p id="practice-share-status" role="status"></p>
+      <ul id="practice-detail-content"></ul>
+      <button id="practice-edit" type="button" hidden>编辑实践正文</button>
+      <button id="practice-visibility" type="button" hidden></button>
+      <form id="practice-edit-form" hidden>
+        <label>实践正文 <textarea name="text" maxlength="400" rows="4"></textarea></label>
+        <div id="practice-edit-conflict" hidden>
+          <strong>另一窗口已保存的正文</strong>
+          <p style="white-space: pre-wrap; overflow-wrap: anywhere"></p>
+        </div>
+        <button>保存正文</button>
+        <button id="practice-edit-cancel" type="button">取消编辑</button>
+      </form>
+      <p id="practice-edit-status" role="status"></p>
+      <section id="practice-discussion" hidden aria-labelledby="practice-discussion-title">
+        <h2 id="practice-discussion-title">实践留言</h2>
+        <a href="?view=my-practice-comments">我的留言</a>
+        <button id="practice-comments-older" type="button" hidden>上一页留言</button>
+        <ul id="practice-comments"></ul>
+        <button id="practice-comments-newer" type="button" hidden>下一页留言</button>
+        <form id="practice-comment-form" hidden>
+          <p id="practice-reply-target" hidden><span></span> <button id="practice-reply-cancel" type="button">取消回复</button></p>
+          <label>留言 <textarea name="text" maxlength="1000" required rows="3"></textarea></label>
+          <button>发布留言</button>
+        </form>
+        <p id="practice-comment-status" role="status"></p>
+      </section>
+    </section>
+    <section id="practice-collection" hidden aria-label="实践收藏">
+      <a href="?view=practice">浏览公开实践</a>
+      <ul id="practice-bookmarks" hidden></ul>
+      <nav id="practice-bookmark-list-pages" hidden aria-label="实践收藏分页">
+        <a id="practice-bookmark-list-previous">上一页</a>
+        <a id="practice-bookmark-list-next">下一页</a>
+      </nav>
+    </section>
+    <section id="practice-replies" hidden aria-label="收到的留言与回复">
+      <a href="?view=my-practice-comments">我的留言</a>
+      <label>查看范围 <select id="practice-reply-scope"><option value="all">全部留言与回复</option><option value="unread">只看未读</option></select></label>
+      <button id="practice-reply-read-page" type="button" hidden>本页全部标为已读</button>
+      <ul id="practice-reply-list"></ul>
+      <nav id="practice-reply-pages" hidden aria-label="实践回复分页">
+        <a id="practice-reply-previous">上一页</a>
+        <a id="practice-reply-next">下一页</a>
+      </nav>
+    </section>
+    <section id="my-practice-comments" hidden aria-label="我的留言">
+      <a href="?view=practice-replies">收到的留言与回复</a>
+      <ul id="my-practice-comment-list"></ul>
+      <nav id="my-practice-comment-pages" hidden aria-label="我的留言分页">
+        <a id="my-practice-comment-previous">上一页</a>
+        <a id="my-practice-comment-next">下一页</a>
+      </nav>
+    </section>
+    <section id="demand-search" hidden aria-label="搜索需求">
+      <p id="my-demand-answers-search-link" hidden><a href="?view=my-demand-answers">我的需求回应</a> · <a href="?view=received-demand-answers">收到的需求回应</a> · <a href="?view=demand-bookmarks">需求收藏</a></p>
+      <form method="get">
+        <input type="hidden" name="view" value="discover">
+        <input type="hidden" name="authorId" disabled>
+        <input type="hidden" name="treeId" disabled>
+        <input type="hidden" name="nodeId" disabled>
+        <input type="hidden" name="tutorialId" disabled>
+        <input type="hidden" name="tutorialVersion" disabled>
+        <label>关键词 <input name="q" type="search" maxlength="80"></label>
+        <label>范围 <select name="scope"><option value="public">公开需求</option><option value="mine">我的需求</option></select></label>
+        <label hidden>回应状态 <select name="responseState" disabled><option value="all">全部</option><option value="unanswered">还没人回应</option><option value="answered">有回应待采纳</option><option value="accepted">已有采纳</option></select></label>
+        <label hidden>排序 <select name="order" disabled><option value="relevance">相关度</option><option value="latest">最近发布</option></select></label>
+        <label hidden>可见范围 <select name="visibility" disabled><option value="all">全部记录</option><option value="public">公开分享</option><option value="private">仅自己可见</option></select></label>
+        <button>搜索</button>
+      </form>
+      <nav id="practice-author-filter" hidden aria-label="作者筛选"><a id="practice-author-back">返回作者主页</a><a id="practice-author-clear">清除作者筛选</a></nav>
+      <nav id="practice-node-filter" hidden aria-label="节点筛选"><a id="practice-node-back">返回知识节点</a><a id="practice-node-clear">清除节点筛选</a><a id="demand-node-ask" hidden>在这个节点提问</a></nav>
+      <nav id="practice-version-filter" hidden aria-label="教程版本筛选"><a id="practice-version-back">返回教程版本</a><a id="practice-version-clear">清除版本筛选</a></nav>
+      <ul id="demand-results"></ul>
+      <p id="practice-follow-manage" hidden><a href="/review/">到知识社区管理关注</a></p>
+      <nav id="demand-pages" aria-label="需求搜索分页"></nav>
+      <p id="demand-search-status" role="status"></p>
+    </section>
+    <section id="demands" hidden aria-labelledby="demands-title">
+      <h2 id="demands-title">相关需求</h2>
+      <button id="demand-bookmark" type="button" hidden></button>
+      <p><a href="?view=my-demand-answers">我的需求回应</a> · <a href="?view=received-demand-answers">收到的需求回应</a> · <a href="?view=demand-bookmarks">需求收藏</a></p>
+      <ul id="demand-list"></ul>
+      <form id="demand-edit-form" hidden>
+        <p><label>编辑需求标题 <input name="title" required maxlength="80"></label></p>
+        <p><label>编辑需求描述 <textarea name="body" required maxlength="2000" rows="4"></textarea></label></p>
+        <div id="demand-edit-conflict" hidden>
+          <strong></strong>
+          <p style="white-space: pre-wrap; overflow-wrap: anywhere"></p>
+        </div>
+        <button>保存修改</button>
+        <button type="button" id="demand-edit-cancel">取消编辑</button>
+      </form>
+      <form id="demand-link-form" hidden>
+        <label>关联已有需求 <select id="demand-link-choice" required></select></label>
+        <button>关联此商品版本</button>
+      </form>
+      <form id="demand-form" hidden>
+        <p><label>需求标题 <input name="title" required maxlength="80"></label></p>
+        <p><label>想解决的问题 <textarea name="body" required maxlength="2000" rows="4"></textarea></label></p>
+        <label><input name="public" type="checkbox">公开这条需求</label>
+        <p id="demand-public-unavailable" hidden>当前节点仅支持私人保存。</p>
+        <button>保存需求</button>
+      </form>
+      <p id="demand-status" role="status"></p>
+      <p id="demand-answer-link-status" role="status"></p>
+      <section id="demand-answers" hidden aria-labelledby="demand-answers-title">
+        <h3 id="demand-answers-title">回应</h3>
+        <p id="demand-answer-closed" hidden>提问者已暂停收集回应。</p>
+        <button id="demand-answer-toggle" type="button" hidden></button>
+        <label id="demand-answer-order-label">回应排序 <select id="demand-answer-order"><option value="original">发布顺序</option><option value="helpful">有帮助数</option></select></label>
+        <ul id="demand-answer-list"></ul>
+        <nav id="demand-answer-pages" hidden aria-label="需求详情回应分页">
+          <button id="demand-answer-previous" type="button">上一页回应</button>
+          <button id="demand-answer-next" type="button">下一页回应</button>
+        </nav>
+        <form id="demand-answer-form">
+          <p><label>分享你的做法 <textarea name="text" required maxlength="2000" rows="4"></textarea></label></p>
+          <button>发布回应</button>
+        </form>
+        <p id="demand-answer-status" role="status"></p>
+      </section>
+    </section>
+    <section id="demand-bookmarks" hidden aria-label="需求收藏">
+      <a href="?view=discover">搜索知识需求</a>
+      <ul id="demand-bookmark-list"></ul>
+      <nav id="demand-bookmark-pages" hidden aria-label="需求收藏分页">
+        <a id="demand-bookmark-previous">上一页</a>
+        <a id="demand-bookmark-next">下一页</a>
+      </nav>
+    </section>
+    <section id="my-demand-answers" hidden aria-label="需求回应">
+      <a href="?view=discover">搜索知识需求</a>
+      <a id="my-demand-answer-export" href="/api/knowledge-demand-answers/mine?export=1" hidden>导出我的回应</a>
+      <label id="received-demand-answer-filter" hidden><input type="checkbox">只看未读</label>
+      <ul id="my-demand-answer-list"></ul>
+      <nav id="received-demand-answer-pages" hidden aria-label="需求回应分页">
+        <a id="received-demand-answer-previous">上一页</a>
+        <a id="received-demand-answer-next">下一页</a>
+      </nav>
+    </section>
+  </main>
+  <script src="runtime-config.js"></script>
+  <script src="product.js"></script>
+</body>
+</html>

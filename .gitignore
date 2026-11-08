@@ -38,6 +38,7 @@ Thumbs.db
 
 # Build artifacts
 *.apk
+/output/playwright/
 
 # Package lock
 package-lock.json

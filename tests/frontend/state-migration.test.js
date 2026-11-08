@@ -150,6 +150,7 @@ describe("state migration to version 3", () => {
       activeTreeId: null,
       selectedNodeId: null,
       selectedNodeAt: null,
+      selectedTutorial: null,
       lightups: []
     });
   });

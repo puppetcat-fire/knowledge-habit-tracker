@@ -49,7 +49,7 @@ function createMainWindow() {
     }
   });
 
-  mainWindow.loadURL(BASE_URL);
+  mainWindow.loadURL(`${BASE_URL}/habit/`);
   mainWindow.on("closed", () => {
     mainWindow = null;
   });

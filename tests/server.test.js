@@ -22,7 +22,7 @@ describe("server", () => {
   });
 
   it("serves the local sandbox app entry", async () => {
-    const response = await request(app).get("/");
+    const response = await request(app).get("/habit/");
     expect(response.status).toBe(200);
     expect(response.text).toContain("<!DOCTYPE html>");
     expect(response.text).toContain("点亮习惯记录器");

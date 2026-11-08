@@ -137,6 +137,42 @@ describe("account", () => {
     expect(me.status).toBe(401);
   });
 
+  it("rejects a stale window without replacing the newer state", async () => {
+    const agent = request.agent(app);
+    const { body: { user } } = await agent.post("/api/register").send({ name: "revision", password: "secret-123" });
+    const first = await agent.get("/api/state");
+    const written = await agent.put("/api/state").set("If-Match", first.body.revision)
+      .send({ version: 3, events: [{ id: "newer" }] });
+    expect(written.status).toBe(200);
+    expect(written.body.revision).not.toBe(first.body.revision);
+    const repeated = await agent.put("/api/state").set("If-Match", first.body.revision).set("X-Action-Account", user.id)
+      .send({ version: 3, events: [{ id: "newer" }] }).expect(200);
+    expect(repeated.body.revision).toBe(written.body.revision);
+    await agent.get("/api/state").set("X-Action-Account", "other-account").expect(409);
+    await agent.put("/api/state").set("X-Action-Account", "other-account").send({ version: 3, events: [] }).expect(409);
+    const stale = await agent.put("/api/state").set("If-Match", first.body.revision)
+      .send({ version: 3, events: [] });
+    expect(stale.status).toBe(409);
+    expect((await agent.get("/api/state")).body.state.events).toEqual([{ id: "newer" }]);
+  });
+
+  it("preserves a damaged account file instead of treating it as a new account", async () => {
+    const agent = request.agent(app);
+    const registered = await agent.post("/api/register").send({ name: "damaged", password: "secret-123" });
+    const statesDir = path.join(tempDir, "states");
+    fs.mkdirSync(statesDir, { recursive: true });
+    const file = path.join(statesDir, `${registered.body.user.id}.json`);
+    fs.writeFileSync(file, "{incomplete", "utf8");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect((await agent.get("/api/state")).status).toBe(500);
+      expect((await agent.put("/api/state").send({ version: 3, events: [] })).status).toBe(500);
+      expect(fs.readFileSync(file, "utf8")).toBe("{incomplete");
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("never returns or stores plaintext passwords", async () => {
     const password = "super-secret-123";
     const response = await request(app).post("/api/register").send({ name: "frank", password });

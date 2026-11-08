@@ -24,14 +24,20 @@
       elapsedMs: 0,
       running: false,
       startedAt: null,
+      sessionStartedAt: null,
+      predictionCandidates: [],
       predictedAction: "",
+      singleLog: "",
+      practiceContext: null,
       selectedOption: "custom",
       selectedHabitId: null,
+      selectedHabitExplicit: false,
       selectedHabitName: CUSTOM_HABIT_NAME
     },
     settings: {
       hubConnected: false,
-      lastBackupAt: null
+      lastBackupAt: null,
+      actionLogs: {}
     },
     forest: {
       activeTreeId: null,
@@ -44,9 +50,12 @@
   let state = null;
   let appBooted = false;
   let remoteSyncReady = false;
-  let remoteSaveTimer = null;
+  let stateSync = null;
+  let currentUser = null;
+  globalThis.KHTBackupContext = { localOnly: LOCAL_ONLY || window.location.protocol === "file:", flush: () => stateSync ? stateSync.flush() : Promise.resolve(true), get ownerId() { return currentUser?.id; }, get revision() { return stateSync?.revision; } };
   let activeRange = "all";
   let activePage = "timer";
+  let habitFormOpen = false;
   let activeRecordTab = "events";
   let timerInterval = null;
   let lastTimerPersist = 0;
@@ -61,6 +70,11 @@
   let lastAimNotice = null;
 
   function bootApp() {
+    if (globalThis.KHTRuntime && globalThis.KHTRuntime.platformUrl) {
+      ["sidebar-platform-entry", "platform-entry", "overview-platform-entry", "node-aim-change"].forEach((id) => {
+        document.getElementById(id).href = globalThis.KHTRuntime.platformUrl;
+      });
+    }
     // 启动顺序：state → 种子树（叠加个人节点）→ 索引 → 清理失效瞄准（只留提示）→ 首次 render()
     if (LOCAL_ONLY) {
       customNodeOverlay = loadLocalNodeOverlay();
@@ -80,16 +94,22 @@
 
   const elements = {
     hubToggle: document.getElementById("hub-connected"),
-    navButtons: Array.from(document.querySelectorAll(".nav-button")),
+    navButtons: Array.from(document.querySelectorAll(".nav-button[data-page-target]")),
     pages: Array.from(document.querySelectorAll(".page")),
     overviewToday: document.getElementById("overview-today"),
     overviewStreak: document.getElementById("overview-streak"),
     overviewActiveHabit: document.getElementById("overview-active-habit"),
     overviewNodeCandidates: document.getElementById("overview-node-candidates"),
     overviewLitNodes: document.getElementById("overview-lit-nodes"),
+    overviewTime: document.getElementById("overview-time"),
+    platformEntry: document.getElementById("platform-entry"),
     habitReminder: document.getElementById("habit-reminder"),
     habitForm: document.getElementById("habit-form"),
     habitEmpty: document.getElementById("habit-empty"),
+    habitFormHint: document.getElementById("habit-form-hint"),
+    newHabitToggle: document.getElementById("new-habit-toggle"),
+    habitSwitchField: document.getElementById("habit-switch-field"),
+    habitSwitch: document.getElementById("habit-switch"),
     habitActive: document.getElementById("habit-active"),
     habitNameInput: document.getElementById("habit-name"),
     habitDaysInput: document.getElementById("habit-days"),
@@ -120,6 +140,11 @@
     weekViewList: document.getElementById("week-view-list"),
     monthViewList: document.getElementById("month-view-list"),
     timerPredictionInput: document.getElementById("timer-prediction"),
+    timerActionPlanner: document.getElementById("timer-action-planner"),
+    timerPreparationHint: document.getElementById("timer-preparation-hint"),
+    timerActionChoices: document.getElementById("timer-action-choices"),
+    timerPauseButton: document.getElementById("timer-pause"),
+    timerEventSearchResults: document.getElementById("timer-event-search-results"),
     timerPredictionDisplay: document.getElementById("timer-prediction-display"),
     timerSuggestions: document.getElementById("timer-suggestions"),
     timerDisplay: document.getElementById("timer-display"),
@@ -180,9 +205,27 @@
       event.preventDefault();
       createHabit();
     });
+    elements.newHabitToggle.addEventListener("click", () => {
+      habitFormOpen = !habitFormOpen;
+      renderHabit();
+      if (habitFormOpen) elements.habitNameInput.focus();
+    });
+    elements.habitSwitch.addEventListener("change", () => {
+      const habit = state.habitHistory.find(item => item.paused && item.id === elements.habitSwitch.value);
+      if (!habit) return;
+      state.habitHistory = state.habitHistory.filter(item => item.id !== habit.id);
+      activateHabit(habit);
+      saveState();
+      render();
+      elements.habitSwitch.focus();
+    });
 
     elements.startTimerFromHabitButton.addEventListener("click", () => {
       if (!state.habit || !state.habit.active) {
+        return;
+      }
+      if (state.timer.sessionStartedAt || state.timer.running || state.timer.elapsedMs > 0) {
+        setActivePage("timer");
         return;
       }
       state.timer.selectedHabitId = state.habit.id;
@@ -249,17 +292,57 @@
     elements.timerPredictionInput.addEventListener("input", () => {
       state.timer.predictedAction = elements.timerPredictionInput.value.trim();
       state.timer.selectedOption = "custom";
+      if (!state.timer.selectedHabitExplicit) {
+        state.timer.selectedHabitId = null;
+        ensureHabitSelection();
+      }
       saveState();
       renderTimer();
     });
+    document.getElementById("timer-history-search").addEventListener("input", renderActionSearch);
 
     elements.timerStartButton.addEventListener("click", () => {
-      if (state.timer.running) {
-        pauseTimer();
-      } else {
-        startTimer();
+      startTimer();
+    });
+    elements.timerPauseButton.addEventListener("click", pauseTimer);
+    let suppressGestureClick = false;
+    elements.timerPredictionDisplay.addEventListener("click", () => {
+      if (suppressGestureClick) { suppressGestureClick = false; return; }
+      setActionChoicesOpen(elements.timerActionChoices.classList.contains("hidden"));
+    });
+    document.getElementById("timer-action-choices-close").addEventListener("click", () => setActionChoicesOpen(false));
+    document.getElementById("timer-action-prev").addEventListener("click", () => cycleCurrentAction(-1));
+    document.getElementById("timer-action-next").addEventListener("click", () => cycleCurrentAction(1));
+    let gestureStart = null;
+    elements.timerPredictionDisplay.addEventListener("pointerdown", (event) => {
+      gestureStart = { x: event.clientX, y: event.clientY };
+      if (elements.timerPredictionDisplay.setPointerCapture) elements.timerPredictionDisplay.setPointerCapture(event.pointerId);
+    });
+    elements.timerPredictionDisplay.addEventListener("pointerup", (event) => {
+      if (!gestureStart) return;
+      const dy = event.clientY - gestureStart.y;
+      const dx = event.clientX - gestureStart.x;
+      gestureStart = null;
+      if (Math.abs(dy) >= 30 && Math.abs(dy) > Math.abs(dx)) {
+        cycleCurrentAction(dy < 0 ? 1 : -1);
+        suppressGestureClick = true;
+        event.preventDefault();
       }
     });
+    elements.timerPredictionDisplay.addEventListener("pointercancel", () => { gestureStart = null; });
+    elements.timerPredictionDisplay.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        cycleCurrentAction(event.key === "ArrowUp" ? -1 : 1);
+      }
+    });
+    document.getElementById("sidebar-toggle").addEventListener("click", (event) => {
+      const compact = document.querySelector(".app-shell").classList.toggle("sidebar-compact");
+      const button = /** @type {HTMLButtonElement} */ (event.currentTarget);
+      button.setAttribute("aria-expanded", String(!compact));
+      button.setAttribute("aria-label", compact ? "展开侧边栏" : "收起侧边栏");
+    });
+    document.getElementById("sidebar-clock").addEventListener("click", () => setActivePage("timer"));
 
     elements.timerResetButton.addEventListener("click", () => {
       resetTimer();
@@ -272,13 +355,15 @@
     elements.timerQuickSaveButton.addEventListener("click", () => {
       createQuickNoteEvent();
     });
+    elements.timerSingleLogInput.addEventListener("input", () => {
+      state.timer.singleLog = elements.timerSingleLogInput.value;
+      saveState();
+    });
 
     elements.timerRecurringLog.addEventListener("input", () => {
-      if (!state.habit || !state.habit.active) {
-        setRecurringStatus("当前没有激活习惯", false);
-        return;
-      }
-      state.habit.recurringLog = elements.timerRecurringLog.value.trim();
+      const action = currentTimerAction();
+      Object.defineProperty(state.settings.actionLogs, action, { value: elements.timerRecurringLog.value.trim(), enumerable: true, configurable: true, writable: true });
+      if (state.habit && action === state.habit.name) state.habit.recurringLog = elements.timerRecurringLog.value.trim();
       saveState();
       renderHabit();
       setRecurringStatus("已自动保存", true);
@@ -418,7 +503,7 @@
   }
 
   function createHabit() {
-    if (state.habit && state.habit.active) {
+    if (state.habit && state.habit.active && !habitFormOpen) {
       return;
     }
     const name = elements.habitNameInput.value.trim();
@@ -431,7 +516,7 @@
       return;
     }
 
-    state.habit = {
+    activateHabit({
       id: createId(),
       name,
       startDate: new Date().toISOString(),
@@ -439,12 +524,7 @@
       active: true,
       recurringLog: elements.habitRecurringLogInput.value.trim(),
       completedAt: null
-    };
-
-    if (!state.timer.selectedHabitId || state.timer.selectedHabitName === CUSTOM_HABIT_NAME) {
-      state.timer.selectedHabitId = state.habit.id;
-      state.timer.selectedHabitName = state.habit.name;
-    }
+    });
 
     elements.habitForm.reset();
     elements.habitDaysInput.value = "60";
@@ -457,13 +537,25 @@
     );
   }
 
+  function activateHabit(habit) {
+    const previousId = state.habit?.id;
+    if (state.habit?.active) state.habitHistory.unshift({ ...state.habit, active: false, paused: true });
+    state.habit = { ...habit, active: true, paused: false };
+    if (!state.timer.sessionStartedAt && !state.timer.running && state.timer.elapsedMs === 0 &&
+        (!state.timer.selectedHabitId || state.timer.selectedHabitId === previousId)) {
+      state.timer.selectedHabitId = habit.id;
+      state.timer.selectedHabitName = habit.name;
+    }
+    habitFormOpen = false;
+  }
+
   function completeActiveHabit() {
     if (!state.habit || !state.habit.active) {
       return;
     }
-    const progressDays = countHabitDays(state.habit, state.events);
-    if (progressDays < state.habit.targetDays) {
-      window.alert(`当前仅完成 ${progressDays}/${state.habit.targetDays} 天，暂不建议结束。`);
+    const milestone = globalThis.KHTProductRules.habitMilestone(state.habit, state.events);
+    if (!milestone.achieved) {
+      window.alert("达到连续四周、每周至少五次后，即可归档为已养成。");
       return;
     }
     const completedAt = new Date().toISOString();
@@ -471,7 +563,7 @@
       ...state.habit,
       active: false,
       completedAt,
-      progressDays
+      progressDays: countHabitDays(state.habit, state.events)
     });
     if (state.timer.selectedHabitId === state.habit.id) {
       state.timer.selectedHabitId = null;
@@ -505,6 +597,8 @@
       source: "manual",
       durationMs: null,
       report: buildManualReport(habit, title, createdAt, lightUp, singleLog),
+      tutorialSnapshot: aimNode ? globalThis.KHTProductRules.tutorialSnapshot(state.forest.selectedTutorial) : null,
+      nodeSnapshot: aimNode ? { id: aimNode.id, title: nodeTitle(aimNode), goal: aimNode.goal, version: aimNode.version || "seed-1", estMinutes: aimNode.estMinutes } : null,
       nodeId: aimNode ? aimNode.id : null,
       treeId: aimTree ? aimTree.tree.id : null
     };
@@ -543,6 +637,7 @@
     };
     state.events.unshift(newEvent);
     elements.timerSingleLogInput.value = "";
+    state.timer.singleLog = "";
     saveState();
     render();
     showMessage(elements.timerReport, newEvent.report, true);
@@ -564,11 +659,28 @@
     }
     ensureHabitSelection();
     const candidates = getPredictionCandidates();
+    if (state.timer.elapsedMs === 0 || !state.timer.predictionCandidates.length) state.timer.predictionCandidates = candidates;
     const action = resolveSelectedAction(candidates);
     state.timer.predictedAction = action;
+    if (!state.timer.practiceContext && state.timer.elapsedMs === 0) {
+      const habit = resolveSelectedHabit();
+      const node = resolveAimNode();
+      const tree = node ? getActiveTree() : null;
+      state.timer.practiceContext = {
+        habit: habit ? { id: habit.id, name: habit.name } : null,
+        nodeId: node ? node.id : null, treeId: tree ? tree.tree.id : null,
+        nodeSnapshot: node ? { id: node.id, title: nodeTitle(node), goal: node.goal || "", version: node.version || "seed-1", estMinutes: node.estMinutes } : null,
+        tutorialSnapshot: node ? globalThis.KHTProductRules.tutorialSnapshot(state.forest.selectedTutorial) : null
+      };
+    }
     elements.timerPredictionInput.value = action;
     state.timer.startedAt = new Date().toISOString();
+    if (!state.timer.sessionStartedAt) state.timer.sessionStartedAt = state.timer.startedAt;
     state.timer.running = true;
+    elements.habitPicker.classList.add("hidden");
+    elements.habitPickerToggle.setAttribute("aria-expanded", "false");
+    setActionChoicesOpen(false);
+    elements.timerReport.classList.add("hidden");
     saveState();
     renderTimer();
   }
@@ -588,6 +700,9 @@
     state.timer.elapsedMs = 0;
     state.timer.running = false;
     state.timer.startedAt = null;
+    state.timer.practiceContext = null;
+    state.timer.sessionStartedAt = null;
+    state.timer.predictionCandidates = [];
     state.timer.predictedAction = elements.timerPredictionInput.value.trim();
     saveState();
     renderTimer();
@@ -600,11 +715,12 @@
     }
 
     const candidates = getPredictionCandidates();
-    const action = resolveSelectedAction(candidates);
-    const habit = resolveSelectedHabit();
+    const action = state.timer.predictedAction || resolveSelectedAction(candidates);
     const createdAt = new Date();
     const aimNode = resolveAimNode();
     const aimTree = aimNode ? getActiveTree() : null;
+    const context = state.timer.practiceContext;
+    const habit = context && Object.hasOwn(context, "habit") ? context.habit : resolveSelectedHabit();
     // 旧字段：v3 起不再写 true，点亮由 state.forest.lightups 表达
     const lightUp = false;
     const singleLog = elements.timerSingleLogInput.value.trim();
@@ -614,27 +730,38 @@
       habitName: habit ? habit.name : null,
       title: action,
       createdAt: createdAt.toISOString(),
+      startedAt: state.timer.sessionStartedAt,
+      endedAt: createdAt.toISOString(),
       lightUp,
       singleLog,
       source: "timer",
       durationMs: elapsedMs,
       report: buildTimerReport(action, elapsedMs, createdAt, lightUp, habit, singleLog),
-      nodeId: aimNode ? aimNode.id : null,
-      treeId: aimTree ? aimTree.tree.id : null
+      tutorialSnapshot: context ? context.tutorialSnapshot : aimNode ? globalThis.KHTProductRules.tutorialSnapshot(state.forest.selectedTutorial) : null,
+      nodeSnapshot: context ? context.nodeSnapshot : aimNode ? { id: aimNode.id, title: nodeTitle(aimNode), goal: aimNode.goal, version: aimNode.version || "seed-1", estMinutes: aimNode.estMinutes } : null,
+      nodeId: context ? context.nodeId : aimNode ? aimNode.id : null,
+      treeId: context ? context.treeId : aimTree ? aimTree.tree.id : null
     };
 
     state.events.unshift(newEvent);
-    if (aimNode) {
+    if (newEvent.nodeId) {
       createLightUpDraft(newEvent);
     }
     state.timer.elapsedMs = 0;
     state.timer.running = false;
     state.timer.startedAt = null;
-    state.timer.predictedAction = action;
+    state.timer.practiceContext = null;
+    state.timer.singleLog = "";
+    state.timer.predictedAction = "";
+    state.timer.selectedOption = "custom";
+    state.timer.sessionStartedAt = null;
+    state.timer.predictionCandidates = [];
+    elements.timerPredictionInput.value = "";
     elements.timerSingleLogInput.value = "";
     saveState();
     render();
     showMessage(elements.timerReport, newEvent.report, true);
+    renderTimerHistory(action);
   }
 
   function startTimerTicker() {
@@ -672,6 +799,17 @@
   }
 
   function renderOverview() {
+    document.getElementById("home-account-name").textContent = currentUser ? `${currentUser.name}的空间` : "我的本机空间";
+    document.getElementById("home-account-status").textContent = currentUser ? "已登录 · 两个系统共用此账号；记录按你的可见性选择保存。" : "本机模式 · 当前记录保存在此浏览器。";
+    const platformUrl = globalThis.KHTRuntime?.platformUrl || document.getElementById("platform-entry").href;
+    document.getElementById("home-profile-entry").href = currentUser ? `${platformUrl.replace(/\/$/, "")}/#person/${encodeURIComponent(currentUser.id)}` : platformUrl;
+    document.getElementById("home-action-title").textContent = state.timer.running ? "继续当前实践" : "开始一次实践";
+    document.getElementById("home-action-description").textContent = state.timer.predictedAction || (state.habit?.active ? `当前习惯：${state.habit.name}` : "直接开始，系统预测；需要时再调整。");
+    const recentEvents = state.events.slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 4);
+    document.getElementById("home-recent-records").innerHTML = recentEvents.length ? recentEvents.map((event) => `<article class="home-record"><span class="record-point" aria-hidden="true"></span><div><h3>${escapeHtml(event.title)}</h3><p>${escapeHtml(event.source === "quick-note" ? "随手记" : event.source === "timer" ? "计时实践" : "事件记录")}${event.durationMs ? ` · ${escapeHtml(formatDuration(event.durationMs))}` : ""}</p></div><time datetime="${escapeAttribute(event.createdAt)}">${escapeHtml(formatDateTime(event.createdAt))}</time></article>`).join("") : '<div class="home-empty"><span class="empty-orbit" aria-hidden="true"></span><div><h3>第一条记录，从现在开始</h3><p>开始一次计时，或在“习惯与事件”中记下做过的事。内容由你决定是否公开。</p></div></div>';
+    const todayKey = getDayKey(new Date());
+    const totalMs = state.events.filter((event) => event.source === "timer" && getDayKey(event.createdAt) === todayKey).reduce((sum, event) => sum + (event.durationMs || 0), 0);
+    elements.overviewTime.textContent = formatDuration(totalMs);
     const todayCount = countEventsOnDate(state.events, new Date());
     const streak = countDailyStreak(state.events);
     const nodeCandidates = buildNodeCandidates(state.events);
@@ -689,7 +827,15 @@
 
   function renderHabit() {
     const hasActiveHabit = Boolean(state.habit && state.habit.active);
-    elements.habitEmpty.classList.toggle("hidden", hasActiveHabit);
+    elements.habitEmpty.classList.toggle("hidden", hasActiveHabit && !habitFormOpen);
+    elements.newHabitToggle.classList.toggle("hidden", !hasActiveHabit);
+    elements.newHabitToggle.setAttribute("aria-expanded", String(hasActiveHabit && habitFormOpen));
+    elements.newHabitToggle.textContent = habitFormOpen ? "取消新建" : "新建习惯";
+    elements.habitFormHint.textContent = hasActiveHabit ? "开始养成新习惯后，当前习惯会暂停，已有记录会保留。" : "还没有激活习惯。先定义一个目标，再开始记录事件。";
+    const paused = state.habitHistory.filter(habit => habit.paused);
+    elements.habitSwitchField.classList.toggle("hidden", !paused.length);
+    elements.habitSwitch.replaceChildren(new Option("选择暂停养成的习惯", ""));
+    paused.forEach(habit => elements.habitSwitch.add(new Option(habit.name, habit.id)));
     elements.habitActive.classList.toggle("hidden", !hasActiveHabit);
     if (!hasActiveHabit) {
       return;
@@ -697,18 +843,18 @@
 
     const habit = state.habit;
     const progressDays = countHabitDays(habit, state.events);
-    const consistency = buildConsistencySummary(habit, state.events);
+    const milestone = globalThis.KHTProductRules.habitMilestone(habit, state.events);
     elements.habitTitle.textContent = habit.name;
-    elements.habitMeta.textContent = `开始于 ${formatDate(habit.startDate)}，目标 ${habit.targetDays} 天。`;
+    elements.habitMeta.textContent = `开始于 ${formatDate(habit.startDate)} · 个人天数目标 ${habit.targetDays} 天`;
     elements.habitDaysProgress.textContent = `${progressDays} / ${habit.targetDays}`;
-    elements.habitWeeklyStatus.textContent = consistency;
+    elements.habitWeeklyStatus.textContent = buildConsistencySummary(milestone);
     elements.habitRecurringPreview.textContent = habit.recurringLog || "暂无";
-    elements.completeHabitButton.disabled = progressDays < habit.targetDays;
+    elements.completeHabitButton.disabled = !milestone.achieved;
   }
 
   function renderHabitHistory() {
     if (!state.habitHistory.length) {
-      elements.habitHistoryList.innerHTML = createEmptyCard("还没有结束过习惯。");
+      elements.habitHistoryList.innerHTML = createEmptyCard("暂无其他习惯。");
       return;
     }
     elements.habitHistoryList.innerHTML = state.habitHistory
@@ -717,7 +863,7 @@
         return `
           <article class="done-item">
             <h4>${escapeHtml(habit.name)}</h4>
-            <div class="done-meta">开始 ${formatDate(habit.startDate)} · 结束 ${habit.completedAt ? formatDate(habit.completedAt) : "未结束"} · 完成 ${progressDays}/${habit.targetDays} 天</div>
+            <div class="done-meta">开始 ${formatDate(habit.startDate)} · ${habit.paused ? "暂停养成" : habit.completedAt ? "已养成于 " + formatDate(habit.completedAt) : "历史习惯"} · 完成 ${progressDays}/${habit.targetDays} 天</div>
             <div class="habit-log">${escapeHtml(habit.recurringLog || "暂无重复日志")}</div>
             <div class="item-actions">
               <button class="action-button" type="button" data-action="edit" data-source="history" data-id="${habit.id}">编辑</button>
@@ -736,6 +882,15 @@
     elements.recordSections.forEach((section) => {
       section.classList.toggle("hidden", section.dataset.recordTab !== activeRecordTab);
     });
+  }
+
+  function eventKnowledgeLink(event, tutorial = null) {
+    if (!event.treeId || !event.nodeId) return "";
+    const platform = elements.platformEntry.href.split("#")[0];
+    const node = `#node/${encodeURIComponent(event.treeId)}/${encodeURIComponent(event.nodeId)}`;
+    if (!tutorial) return `<a href="${escapeAttribute(platform + node)}">查看当前知识目标</a>`;
+    if (![tutorial.id, tutorial.version].every((part) => /^[A-Za-z0-9_-]{1,64}$/.test(part))) return "";
+    return `<a href="${escapeAttribute(platform + node + "/tutorial/" + tutorial.id + "/" + tutorial.version)}">打开当时使用的教程版本</a>`;
   }
 
   function renderDoneList() {
@@ -761,6 +916,8 @@
           <article class="done-item">
             <h4>${escapeHtml(event.title)}</h4>
             <div class="done-meta">${formatDateTime(event.createdAt)} · ${sourceText}${durationText}${habitText} · ${lightUpText}</div>
+            ${event.nodeSnapshot ? `<details class="event-method"><summary>当时的目标：${escapeHtml(event.nodeSnapshot.title)}</summary><div class="habit-log">${escapeHtml(event.nodeSnapshot.goal || "")}</div></details>` : ""}
+            ${event.tutorialSnapshot ? `<details class="event-method"><summary>所用知识：${escapeHtml(event.tutorialSnapshot.title)} · ${escapeHtml(event.tutorialSnapshot.version.slice(0, 8))}</summary><div class="habit-log">${escapeHtml(event.tutorialSnapshot.method)}</div>${eventKnowledgeLink(event, event.tutorialSnapshot)}</details>` : ""}
             ${log}
             <div class="item-actions">
               <button class="action-button" type="button" data-action="edit" data-source="event" data-id="${event.id}">编辑</button>
@@ -823,25 +980,31 @@
     }
     elements.habitEventGroups.innerHTML = groups
       .map((group) => {
-        const eventsHtml = group.events
-          .slice(0, 6)
-          .map((event) => {
-            const durationText = event.durationMs ? ` · ${formatDuration(event.durationMs)}` : "";
-            return `
-              <div class="group-event">
-                <div class="group-event-title">${escapeHtml(event.title)}</div>
-                <div class="done-meta">${formatDateTime(event.createdAt)}${durationText}</div>
-              </div>
-            `;
-          })
-          .join("");
+        const renderEvent = (event) => {
+          const durationText = Number.isFinite(event.durationMs) ? ` · ${formatDuration(event.durationMs)}` : "";
+          const note = event.singleLog ? `<p class="habit-log">${escapeHtml(event.singleLog)}</p>` : "";
+          const goal = event.nodeSnapshot?.title ? `<p>当时的知识目标：${escapeHtml(event.nodeSnapshot.title)}</p>` : "";
+          const method = event.tutorialSnapshot?.title ? `<p>使用的方法：${escapeHtml(event.tutorialSnapshot.title)}</p>` : "";
+          const targetLink = eventKnowledgeLink(event);
+          const versionLink = event.tutorialSnapshot ? eventKnowledgeLink(event, event.tutorialSnapshot) : "";
+          return `
+            <div class="group-event">
+              <div class="group-event-title">${escapeHtml(event.title)}</div>
+              <div class="done-meta">${formatDateTime(event.createdAt)}${durationText}</div>
+              ${note || goal || method || targetLink ? `<details><summary>查看事件详情</summary>${note}${goal}${method}${targetLink ? `<p>${targetLink}</p>` : ""}${versionLink ? `<p>${versionLink}</p>` : ""}</details>` : ""}
+            </div>
+          `;
+        };
+        const recent = group.events.slice(0, 6).map(renderEvent).join("");
+        const older = group.events.slice(6);
         return `
           <article class="done-item">
             <div class="group-header">
               <h4>${escapeHtml(group.label)}</h4>
               <span class="meta-note">${group.events.length} 条事件</span>
             </div>
-            <div class="group-events">${eventsHtml}</div>
+            <div class="group-events">${recent}</div>
+            ${older.length ? `<details><summary>展开更早的 ${older.length} 条事件</summary><div class="group-events">${older.map(renderEvent).join("")}</div></details>` : ""}
           </article>
         `;
       })
@@ -864,7 +1027,8 @@
         return `
           <article class="done-item">
             <h4>${escapeHtml(group.label)}</h4>
-            <div class="done-meta">共 ${group.total} 条 · 正式事件 ${group.formalCount} 条 · 随手记 ${group.quickNoteCount} 条</div>
+            <div class="done-meta">共 ${group.total} 条 · 正式事件 ${group.formalCount} 条 · 随手记 ${group.quickNoteCount} 条 · 已计时 ${formatDuration(group.totalMs)}</div>
+            <div class="meta-note">${group.unmeasuredCount} 条完成记录未计时，不用估算时长代替实际记录。</div>
             <div class="habit-log">${escapeHtml(group.summary)}</div>
           </article>
         `;
@@ -873,22 +1037,35 @@
   }
 
   function renderTimer() {
+    elements.startTimerFromHabitButton.textContent = state.timer.sessionStartedAt || state.timer.running || state.timer.elapsedMs > 0
+      ? "返回当前计时"
+      : "从该习惯开始计时";
     const elapsedMs = getElapsedMs();
     elements.timerDisplay.textContent = formatDuration(elapsedMs);
-    elements.timerStartButton.textContent = state.timer.running ? "暂停" : "开始";
+    document.getElementById("sidebar-clock").textContent = formatDuration(elapsedMs);
+    elements.timerStartButton.textContent = elapsedMs > 0 && !state.timer.running ? "继续计时" : "开始计时";
+    elements.timerStartButton.disabled = state.timer.running;
+    elements.timerPauseButton.disabled = !state.timer.running;
     elements.timerResetButton.disabled = elapsedMs <= 0;
     elements.timerFinishButton.disabled = elapsedMs <= 0;
-    const candidates = getPredictionCandidates();
-    const prediction = resolveSelectedAction(candidates);
-    elements.timerPredictionDisplay.textContent = prediction ? `当前动作：${prediction}` : "尚未选择动作";
-    renderSuggestions(candidates);
-    renderHabitPicker();
-    elements.timerRecurringLog.value = state.habit && state.habit.active ? state.habit.recurringLog || "" : "";
-    if (state.habit && state.habit.active) {
-      setRecurringStatus(state.habit.recurringLog ? "已挂靠到当前习惯" : "建议写下固定步骤", Boolean(state.habit.recurringLog));
-    } else {
-      setRecurringStatus("当前没有激活习惯", false);
+    elements.timerPreparationHint.classList.toggle("hidden", state.timer.running);
+    if (!elements.timerPredictionInput.value && state.timer.predictedAction) {
+      elements.timerPredictionInput.value = state.timer.predictedAction;
     }
+    const candidates = currentPredictionCandidates();
+    const prediction = currentTimerAction();
+    elements.timerPredictionDisplay.textContent = prediction;
+    document.getElementById("timer-action-prev").disabled = candidates.length < 2;
+    document.getElementById("timer-action-next").disabled = candidates.length < 2;
+    const suggestionKey = JSON.stringify([candidates, state.timer.selectedOption]);
+    if (elements.timerSuggestions.dataset.renderKey !== suggestionKey) {
+      renderSuggestions(candidates);
+      elements.timerSuggestions.dataset.renderKey = suggestionKey;
+    }
+    renderHabitPicker();
+    elements.timerRecurringLog.value = Object.hasOwn(state.settings.actionLogs, prediction) ? state.settings.actionLogs[prediction] : (state.habit?.name === prediction ? state.habit.recurringLog || "" : "");
+    elements.timerSingleLogInput.value = state.timer.singleLog || "";
+    setRecurringStatus(elements.timerRecurringLog.value ? "此事件的步骤与提醒" : "可选，下次做这件事时可复用", Boolean(elements.timerRecurringLog.value));
     renderAimLine();
   }
 
@@ -897,7 +1074,7 @@
     elements.timerSuggestions.innerHTML = slots
       .map((slot, index) => {
         const title = candidates[index];
-        const isActive = state.timer.selectedOption === slot;
+        const isActive = title === currentTimerAction();
         const disabled = !title;
         return `
           <button
@@ -905,6 +1082,7 @@
             type="button"
             data-slot="${slot}"
             data-title="${escapeAttribute(title || "")}"
+            aria-pressed="${isActive}"
             ${disabled ? "disabled" : ""}
           >
             ${title ? escapeHtml(title) : `候选 ${index + 1}`}
@@ -912,7 +1090,7 @@
         `;
       })
       .concat(
-        `<button class="timer-suggestion${state.timer.selectedOption === "custom" ? " active" : ""}" type="button" data-slot="custom">自定义</button>`
+        `<button class="timer-suggestion${!candidates.includes(currentTimerAction()) ? " active" : ""}" type="button" data-slot="custom">自定义</button>`
       )
       .join("");
 
@@ -930,13 +1108,75 @@
         if (!title) {
           return;
         }
-        state.timer.selectedOption = slot;
-        state.timer.predictedAction = title;
-        elements.timerPredictionInput.value = title;
-        saveState();
-        renderTimer();
+        selectTimerAction(title);
       });
     });
+  }
+
+  function currentPredictionCandidates() {
+    return state.timer.predictionCandidates.length && (state.timer.running || state.timer.elapsedMs > 0)
+      ? state.timer.predictionCandidates : getPredictionCandidates();
+  }
+
+  function currentTimerAction() {
+    return state.timer.predictedAction || resolveSelectedAction(currentPredictionCandidates());
+  }
+
+  function setActionChoicesOpen(open) {
+    elements.timerActionChoices.classList.toggle("hidden", !open);
+    elements.timerPredictionDisplay.setAttribute("aria-expanded", String(open));
+    if (open) {
+      renderActionSearch();
+      elements.timerPredictionInput.focus();
+    } else {
+      elements.habitPicker.classList.add("hidden");
+      elements.habitPickerToggle.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function selectTimerAction(title) {
+    state.timer.predictedAction = title;
+    state.timer.selectedOption = "custom";
+    elements.timerPredictionInput.value = title;
+    if (!state.timer.selectedHabitExplicit) {
+      state.timer.selectedHabitId = null;
+      ensureHabitSelection();
+    }
+    saveState();
+    renderTimer();
+    setActionChoicesOpen(false);
+    elements.timerPredictionDisplay.focus();
+  }
+
+  function cycleCurrentAction(direction) {
+    const candidates = currentPredictionCandidates();
+    if (!candidates.length) return;
+    const index = candidates.indexOf(currentTimerAction());
+    selectTimerAction(candidates[(index + direction + candidates.length) % candidates.length]);
+  }
+
+  function renderActionSearch() {
+    const query = /** @type {HTMLInputElement} */ (document.getElementById("timer-history-search")).value.trim().toLowerCase();
+    const titles = [...new Set(state.events.filter((event) => event.source !== "quick-note").map((event) => event.title))];
+    const matches = titles.filter((title) => !query || title.toLowerCase().includes(query)).slice(0, 12);
+    elements.timerEventSearchResults.innerHTML = matches.map((title) => `<button class="event-choice" type="button" data-event-title="${escapeAttribute(title)}">${escapeHtml(title)}</button>`).join("");
+    const sequence = state.events.filter((event) => event.source !== "quick-note").slice().sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)).slice(-16);
+    document.getElementById("timer-event-graph-content").innerHTML = sequence.length ? sequence.map((event, index) => `${index ? '<span class="sequence-arrow" aria-hidden="true">→</span>' : ""}<button class="event-choice" type="button" data-event-title="${escapeAttribute(event.title)}"><strong>${escapeHtml(event.title)}</strong><time>${escapeHtml(formatDateTime(event.createdAt))}</time></button>`).join("") : '<p class="meta-note">留下记录后，这里会出现真实的事件顺序。</p>';
+    [elements.timerEventSearchResults, document.getElementById("timer-event-graph-content")].forEach((container) => {
+      container.querySelectorAll("[data-event-title]").forEach((button) => {
+        button.addEventListener("click", () => selectTimerAction(/** @type {HTMLElement} */ (button).dataset.eventTitle));
+      });
+    });
+  }
+
+  function renderTimerHistory(action) {
+    const records = state.events.filter((event) => event.title === action && event.source !== "quick-note");
+    const today = getDayKey(new Date());
+    const todayCount = records.filter((event) => getDayKey(event.createdAt) === today).length;
+    const history = document.createElement("div");
+    history.className = "timer-report-history";
+    history.innerHTML = `<p>今天记录 ${todayCount} 次 · 累计 ${records.length} 次</p><details><summary>这件事的历史记录</summary>${records.slice(0, 12).map((event) => `<article><time>${escapeHtml(formatDateTime(event.createdAt))}</time><span>${event.durationMs ? escapeHtml(formatDuration(event.durationMs)) : "未计时"}</span>${event.singleLog ? `<p>${escapeHtml(event.singleLog)}</p>` : ""}</article>`).join("")}</details>`;
+    elements.timerReport.append(history);
   }
 
   function renderHabitReminder() {
@@ -996,6 +1236,8 @@
         const habitName = button.dataset.habitName || CUSTOM_HABIT_NAME;
         state.timer.selectedHabitId = habitId;
         state.timer.selectedHabitName = habitName;
+        state.timer.selectedHabitExplicit = true;
+        if (state.timer.practiceContext) state.timer.practiceContext.habit = { id: habitId, name: habitName };
         saveState();
         renderHabitPicker();
       });
@@ -1022,6 +1264,14 @@
     if (node) {
       const overMinutes = getElapsedMs() > Number(node.estMinutes) * 60000;
       elements.nodeAimLabel.textContent = `这次对着：${nodeTitle(node)} · 建议 ${node.estMinutes} 分钟${overMinutes ? " · 已超过建议时长" : ""}`;
+      const method = state.timer.practiceContext?.tutorialSnapshot || state.forest.selectedTutorial;
+      if (method) {
+        elements.nodeAimLabel.textContent += ` · 方法：${method.title}`;
+        if (!state.timer.running && !state.timer.sessionStartedAt && !getElapsedMs() &&
+            method.startAction && method.startAction !== currentTimerAction()) {
+          elements.nodeAimLabel.textContent += ` · 前五分钟：${method.startAction}`;
+        }
+      }
     } else {
       elements.nodeAimLabel.textContent = "";
     }
@@ -1070,6 +1320,10 @@
     });
     elements.navButtons.forEach((button) => {
       button.classList.toggle("active", button.dataset.pageTarget === page);
+      if (button.closest(".nav")) {
+        if (button.dataset.pageTarget === page) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      }
     });
     if (page === "bug") {
       void loadRemoteBugs();
@@ -1102,7 +1356,7 @@
     elements.modalFields.innerHTML = `
       <label class="field">
         <span>事件标题</span>
-        <input id="modal-event-title" type="text" maxlength="80" value="${escapeAttribute(record.title)}" />
+        <input id="modal-event-title" type="text" maxlength="${Math.max(80, record.title.length)}" value="${escapeAttribute(record.title)}" />
       </label>
       <label class="field">
         <span>单次日志</span>
@@ -1184,6 +1438,10 @@
       record.title = title;
       record.singleLog = logInput ? logInput.value.trim() : "";
       record.report = rebuildReport(record);
+      const draft = findLightUpByEventId(record.id);
+      if (draft?.status === "draft") {
+        draft.evidence.detail = record.singleLog || record.title;
+      }
       saveState();
       render();
       closeModal();
@@ -1278,13 +1536,18 @@
   function importBackup(text) {
     const parsed = JSON.parse(text);
     const incoming = parsed && parsed.state ? parsed.state : parsed;
+    if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !["events", "habit", "forest", "timer"].some((key) => key in incoming) || (incoming.events !== undefined && (!Array.isArray(incoming.events) || incoming.events.some((event) => !event || typeof event.title !== "string" || !Number.isFinite(Date.parse(event.createdAt)))))) {
+      throw new Error("文件不是有效的习惯备份，当前记录没有改变。");
+    }
     const incomingVersion = Number(incoming && incoming.version) || 1;
     if (incomingVersion > STATE_VERSION) {
       throw new Error(
         `备份来自更新的版本（v${incomingVersion}），当前只支持到 v${STATE_VERSION}。请先升级页面。`
       );
     }
+    if (!confirm(`恢复 ${(incoming.events || []).length} 条事件并替换当前习惯状态？建议先导出当前备份。`)) return;
     state = normalizeState(incoming);
+    elements.timerPredictionInput.value = state.timer.predictedAction;
     rebuildLightUpIndex();
     saveState();
     render();
@@ -1292,15 +1555,13 @@
   }
 
   function ensureHabitSelection() {
-    if (state.timer.selectedHabitId) {
+    if (state.timer.selectedHabitExplicit || state.timer.selectedHabitId) {
       return;
     }
-    if (state.habit && state.habit.active) {
-      state.timer.selectedHabitId = state.habit.id;
-      state.timer.selectedHabitName = state.habit.name;
-    } else {
-      state.timer.selectedHabitName = CUSTOM_HABIT_NAME;
-    }
+    const action = state.timer.predictedAction || getPredictionCandidates()[0] || guessPrediction();
+    const habit = getAvailableHabits().find((item) => item.name === action);
+    state.timer.selectedHabitId = habit?.id || null;
+    state.timer.selectedHabitName = habit?.name || CUSTOM_HABIT_NAME;
   }
 
   function resolveSelectedHabit() {
@@ -1332,20 +1593,24 @@
 
   function getPredictionCandidates() {
     const titles = new Map();
-    const candidateEvents = state.events.filter((event) => event.source !== "quick-note");
-    if (state.habit && state.habit.active) {
-      titles.set(state.habit.name, 4);
-      candidateEvents
-        .filter((event) => event.habitId === state.habit.id)
-        .slice(0, 10)
-        .forEach((event, index) => {
-          titles.set(event.title, (titles.get(event.title) || 0) + Math.max(1, 5 - index));
-        });
-    } else {
-      candidateEvents.slice(0, 6).forEach((event, index) => {
-        titles.set(event.title, (titles.get(event.title) || 0) + Math.max(1, 4 - index));
-      });
-    }
+    const now = new Date();
+    const dayMs = 86400000;
+    const candidateEvents = state.events.filter((event) => event.source !== "quick-note" && Date.parse(event.createdAt) <= now.getTime()).slice().sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+    const lastTitle = candidateEvents.at(-1)?.title;
+    // Count and time similarity decay with age; observed predecessor transitions are optional evidence.
+    candidateEvents.forEach((event, index) => {
+      const time = new Date(event.startedAt || event.createdAt);
+      const age = (now.getTime() - time.getTime()) / dayMs;
+      if (!Number.isFinite(age) || age < 0) return;
+      const recency = Math.exp(-age / 90);
+      const minutes = Math.abs((now.getHours() * 60 + now.getMinutes()) - (time.getHours() * 60 + time.getMinutes()));
+      const clockSimilarity = Math.exp(-Math.min(minutes, 1440 - minutes) / 90);
+      const cycle = Math.exp(-Math.abs(age - 1) / 1.5) + Math.exp(-Math.abs(age - 7) / 2) + .3 * Math.exp(-Math.abs(age - 365) / 14);
+      const sequence = index > 0 && candidateEvents[index - 1].title === lastTitle ? 1 : 0;
+      const score = recency * (1 + clockSimilarity + cycle + sequence);
+      titles.set(event.title, (titles.get(event.title) || 0) + score);
+    });
+    if (state.habit?.active && !titles.has(state.habit.name)) titles.set(state.habit.name, .5);
     return Array.from(titles.entries())
       .sort((left, right) => right[1] - left[1])
       .map((entry) => entry[0])
@@ -1376,10 +1641,7 @@
     if (state.habit && state.habit.active) {
       return state.habit.name;
     }
-    if (state.events.length) {
-      return state.events[0].title;
-    }
-    return "做一件最小但完整的事";
+    return "未命名事件";
   }
 
   function resolveQuickNoteTitle(singleLog) {
@@ -1462,19 +1724,15 @@
     return segments.join(" · ");
   }
 
-  function buildConsistencySummary(habit, events) {
-    const weeklyCounts = getLastFourWeekCounts(habit.id, events);
-    if (!weeklyCounts.some((count) => count > 0)) {
-      return "最近四周暂无稳定记录";
+  function buildConsistencySummary(milestone) {
+    const weeklyCounts = milestone.counts;
+    if (milestone.achieved) {
+      return "已达成连续四周、每周至少五次。愿意的话，优先把产品和理念推荐给朋友，也可自愿赞赏 2–5 元；继续使用免费。";
     }
-    return weeklyCounts.map((count, index) => `W${index + 1}: ${count}`).join(" · ");
-  }
-
-  function getLastFourWeekCounts(habitId, events) {
-    const weekKeys = getRecentWeekKeys(4);
-    return weekKeys.map((weekKey) => {
-      return events.filter((event) => event.habitId === habitId && getWeekKey(event.createdAt) === weekKey).length;
-    });
+    if (!weeklyCounts.some((count) => count > 0)) {
+      return "连续四周、每周五次 · 还没有完成记录";
+    }
+    return weeklyCounts.map((count, index) => `${index === 3 ? "本周" : `前 ${3 - index} 周`}: ${count}/5`).join(" · ");
   }
 
   function buildNodeCandidates(events) {
@@ -1524,7 +1782,7 @@
       const key = event.habitId || `free:${event.habitName || CUSTOM_HABIT_NAME}`;
       if (!groups.has(key)) {
         groups.set(key, {
-          label: event.habitName || CUSTOM_HABIT_NAME,
+          label: (event.habitId && getHabitById(event.habitId)?.name) || event.habitName || CUSTOM_HABIT_NAME,
           events: []
         });
       }
@@ -1548,11 +1806,15 @@
           total: 0,
           formalCount: 0,
           quickNoteCount: 0,
+          totalMs: 0,
+          unmeasuredCount: 0,
           titles: []
         });
       }
       const group = groups.get(key);
       group.total += 1;
+      if (event.source === "timer") group.totalMs += event.durationMs || 0;
+      else if (event.source !== "quick-note") group.unmeasuredCount += 1;
       if (event.source === "quick-note") {
         group.quickNoteCount += 1;
       } else {
@@ -1666,7 +1928,8 @@
     if (!state.timer.running || !state.timer.startedAt) {
       return state.timer.elapsedMs;
     }
-    return state.timer.elapsedMs + (Date.now() - new Date(state.timer.startedAt).getTime());
+    const startedAt = Date.parse(state.timer.startedAt);
+    return state.timer.elapsedMs + (Number.isFinite(startedAt) ? Math.max(0, Date.now() - startedAt) : 0);
   }
 
   function loadState() {
@@ -1692,7 +1955,7 @@
     if (!trees.length) {
       console.warn("[forest] 未加载到种子树：请确认 seed-trees/seed-trees.js 与 index.html 一起分发。");
     }
-    return trees;
+    return trees.concat((customNodeOverlay.trees || []).map((tree) => ({ format: TREE_FORMAT, tree, nodes: [], edges: [], tutorials: [] })));
   }
 
   function buildNodeIndex(trees) {
@@ -1712,7 +1975,8 @@
     const source = raw && typeof raw === "object" ? raw : {};
     return {
       nodes: Array.isArray(source.nodes) ? source.nodes.filter((node) => node && typeof node === "object") : [],
-      edges: Array.isArray(source.edges) ? source.edges.filter((edge) => edge && typeof edge === "object") : []
+      edges: Array.isArray(source.edges) ? source.edges.filter((edge) => edge && typeof edge === "object") : [],
+      trees: Array.isArray(source.trees) ? source.trees : []
     };
   }
 
@@ -1726,15 +1990,11 @@
   }
 
   async function loadRemoteNodeOverlay() {
-    try {
-      const response = await window.fetch("/api/nodes", { credentials: "same-origin" });
-      if (!response.ok) {
-        return { nodes: [], edges: [] };
-      }
-      return normalizeNodeOverlay(await readJsonResponse(response));
-    } catch {
-      return { nodes: [], edges: [] };
-    }
+    const response = await window.fetch("/api/nodes", { credentials: "same-origin" });
+    if (!response.ok) throw new Error("知识树暂时无法读取，请重试。当前瞄准和记录不会被清空。");
+    const data = await readJsonResponse(response);
+    if (!data || !Array.isArray(data.nodes)) throw new Error("知识树数据无法读取，请恢复服务后重试。");
+    return normalizeNodeOverlay(data);
   }
 
   // 返回新树对象，不动种子数组：nodeIndex 合并后，个人节点才不算悬空
@@ -1878,14 +2138,13 @@
     if (existing) {
       return existing;
     }
-    const node = resolveAimNode();
+    const node = getNodeById(event.treeId, event.nodeId);
     if (!node) {
       return null;
     }
-    const tree = getActiveTree();
     const lightUp = normalizeLightUp({
       id: createId(),
-      treeId: tree ? tree.tree.id : null,
+      treeId: event.treeId,
       nodeId: node.id,
       status: "draft",
       evidence: {
@@ -1894,13 +2153,18 @@
         timestamp: event.createdAt
       },
       eventId: event.id,
+      tutorialId: event.tutorialSnapshot ? event.tutorialSnapshot.id : null,
+      tutorialSnapshot: event.tutorialSnapshot || null,
       habitId: event.habitId,
       createdAt: event.createdAt
     });
     state.forest.lightups.unshift(lightUp);
     rebuildLightUpIndex();
-    state.forest.selectedNodeId = null;
-    state.forest.selectedNodeAt = null;
+    if (state.forest.activeTreeId === event.treeId && state.forest.selectedNodeId === event.nodeId) {
+      state.forest.selectedNodeId = null;
+      state.forest.selectedNodeAt = null;
+      state.forest.selectedTutorial = null;
+    }
     return lightUp;
   }
 
@@ -1919,11 +2183,16 @@
         elapsedMs: Number(timer.elapsedMs) > 0 ? Number(timer.elapsedMs) : 0,
         running: Boolean(timer.running),
         startedAt: typeof timer.startedAt === "string" ? timer.startedAt : null,
+        sessionStartedAt: typeof timer.sessionStartedAt === "string" ? timer.sessionStartedAt : typeof timer.startedAt === "string" ? timer.startedAt : null,
+        predictionCandidates: Array.isArray(timer.predictionCandidates) ? timer.predictionCandidates.filter((title) => typeof title === "string" && title.trim()).slice(0, 3) : [],
         predictedAction: typeof timer.predictedAction === "string" ? timer.predictedAction : "",
+        singleLog: typeof timer.singleLog === "string" ? timer.singleLog : "",
+        practiceContext: timer.practiceContext && typeof timer.practiceContext === "object" ? timer.practiceContext : null,
         selectedOption: ["p1", "p2", "p3", "custom"].includes(timer.selectedOption)
           ? timer.selectedOption
           : "custom",
         selectedHabitId: typeof timer.selectedHabitId === "string" && timer.selectedHabitId ? timer.selectedHabitId : null,
+        selectedHabitExplicit: Boolean(timer.selectedHabitExplicit),
         selectedHabitName:
           typeof timer.selectedHabitName === "string" && timer.selectedHabitName
             ? timer.selectedHabitName
@@ -1931,7 +2200,8 @@
       },
       settings: {
         hubConnected: Boolean(settings.hubConnected),
-        lastBackupAt: typeof settings.lastBackupAt === "string" ? settings.lastBackupAt : null
+        lastBackupAt: typeof settings.lastBackupAt === "string" ? settings.lastBackupAt : null,
+        actionLogs: Object.fromEntries(Object.entries(settings.actionLogs && typeof settings.actionLogs === "object" ? settings.actionLogs : {}).filter(([key, value]) => key.length <= 80 && typeof value === "string").map(([key, value]) => [key, value.slice(0, 400)]))
       },
       forest: normalizeForest(candidate.forest)
     };
@@ -1944,6 +2214,7 @@
       selectedNodeId:
         typeof forest.selectedNodeId === "string" && forest.selectedNodeId ? forest.selectedNodeId : null,
       selectedNodeAt: typeof forest.selectedNodeAt === "string" ? forest.selectedNodeAt : null,
+      selectedTutorial: globalThis.KHTProductRules.tutorialSnapshot(forest.selectedTutorial),
       lightups: Array.isArray(forest.lightups) ? forest.lightups.map(normalizeLightUp).filter(Boolean) : []
     };
   }
@@ -1961,7 +2232,9 @@
       treeId: typeof raw.treeId === "string" && raw.treeId ? raw.treeId : null,
       nodeId: raw.nodeId.trim(),
       tutorialId: typeof raw.tutorialId === "string" && raw.tutorialId ? raw.tutorialId : null,
+      tutorialSnapshot: globalThis.KHTProductRules.tutorialSnapshot(raw.tutorialSnapshot),
       status: raw.status === "confirmed" ? "confirmed" : "draft",
+      ...(raw.visibility === "private" ? { visibility: "private" } : {}),
       evidence: {
         type: "self",
         detail: typeof evidence.detail === "string" ? evidence.detail : "",
@@ -1988,6 +2261,7 @@
       startDate: typeof rawHabit.startDate === "string" ? rawHabit.startDate : new Date().toISOString(),
       targetDays: clampNumber(rawHabit.targetDays, 21, 365, 60),
       active,
+      paused: !active && rawHabit.paused === true,
       recurringLog: typeof rawHabit.recurringLog === "string" ? rawHabit.recurringLog : "",
       completedAt: typeof rawHabit.completedAt === "string" ? rawHabit.completedAt : null,
       progressDays: Number(rawHabit.progressDays) > 0 ? Number(rawHabit.progressDays) : undefined
@@ -2008,7 +2282,11 @@
       title: rawEvent.title.trim(),
       nodeId: typeof rawEvent.nodeId === "string" && rawEvent.nodeId ? rawEvent.nodeId : null,
       treeId: typeof rawEvent.treeId === "string" && rawEvent.treeId ? rawEvent.treeId : null,
+      tutorialSnapshot: globalThis.KHTProductRules.tutorialSnapshot(rawEvent.tutorialSnapshot),
+      nodeSnapshot: rawEvent.nodeSnapshot && typeof rawEvent.nodeSnapshot === "object" ? rawEvent.nodeSnapshot : null,
       createdAt: typeof rawEvent.createdAt === "string" ? rawEvent.createdAt : new Date().toISOString(),
+      startedAt: typeof rawEvent.startedAt === "string" ? rawEvent.startedAt : null,
+      endedAt: typeof rawEvent.endedAt === "string" ? rawEvent.endedAt : null,
       lightUp: Boolean(rawEvent.lightUp),
       singleLog: typeof rawEvent.singleLog === "string" ? rawEvent.singleLog : "",
       source:
@@ -2023,27 +2301,18 @@
   }
 
   function saveState() {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      if (!stateSync) window.alert("浏览器空间不足，记录尚未保存，请导出备份并保持页面打开。");
+    }
     if (!LOCAL_ONLY && remoteSyncReady) {
       scheduleRemoteSave();
     }
   }
 
   function scheduleRemoteSave() {
-    if (remoteSaveTimer) {
-      window.clearTimeout(remoteSaveTimer);
-    }
-    remoteSaveTimer = window.setTimeout(() => {
-      remoteSaveTimer = null;
-      window
-        .fetch("/api/state", {
-          method: "PUT",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(state)
-        })
-        .catch(() => {});
-    }, 400);
+    stateSync.queue(state);
   }
 
   function getCachedBugs() {
@@ -2122,7 +2391,8 @@
   }
 
   function getDayKey(value) {
-    return formatDate(value);
+    const date = new Date(value);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
 
   function getWeekKey(value) {
@@ -2131,7 +2401,7 @@
     const monday = new Date(date);
     monday.setDate(date.getDate() - day + 1);
     monday.setHours(0, 0, 0, 0);
-    return monday.toISOString().slice(0, 10);
+    return getDayKey(monday);
   }
 
   function getMonthKey(value) {
@@ -2141,22 +2411,12 @@
 
   function getPeriodKey(value, mode) {
     if (mode === "day") {
-      return new Date(value).toISOString().slice(0, 10);
+      return getDayKey(value);
     }
     if (mode === "week") {
       return getWeekKey(value);
     }
     return getMonthKey(value);
-  }
-
-  function getRecentWeekKeys(count) {
-    const keys = [];
-    let cursor = new Date();
-    for (let index = 0; index < count; index += 1) {
-      keys.push(getWeekKey(cursor.toISOString()));
-      cursor = addDays(cursor, -7);
-    }
-    return keys;
   }
 
   function formatDate(value) {
@@ -2240,19 +2500,12 @@
   }
 
   async function enterApp() {
-    let nextState = null;
-    try {
-      const response = await window.fetch("/api/state", { credentials: "same-origin" });
-      if (response.ok) {
-        const data = await readJsonResponse(response);
-        if (data && data.state && typeof data.state === "object") {
-          nextState = normalizeState(data.state);
-        }
-      }
-    } catch {
-      nextState = null;
-    }
-    state = nextState || cloneDefaultState();
+    remoteSyncReady = false;
+    stateSync = new window.KHTStateSync(currentUser.id);
+    const nextState = await stateSync.load();
+    state = nextState ? normalizeState(nextState) : cloneDefaultState();
+    elements.timerPredictionInput.value = state.timer.predictedAction;
+    activePage = "timer";
     customNodeOverlay = await loadRemoteNodeOverlay();
     showApp();
     if (!appBooted) {
@@ -2267,14 +2520,11 @@
     }
     // 启动加载本身不写服务端，等用户第一次改动再同步
     remoteSyncReady = true;
+    if (stateSync.pending) void stateSync.flush();
   }
 
   function returnToGate() {
     remoteSyncReady = false;
-    if (remoteSaveTimer) {
-      window.clearTimeout(remoteSaveTimer);
-      remoteSaveTimer = null;
-    }
     const passwordInput = document.getElementById("account-password");
     if (passwordInput) {
       passwordInput.value = "";
@@ -2287,11 +2537,17 @@
     try {
       response = await window.fetch("/api/me", { credentials: "same-origin" });
     } catch {
-      fallbackToLocal();
+      if (window.location.protocol === "file:") {
+        fallbackToLocal();
+      } else {
+        const errorBox = document.getElementById("account-error");
+        errorBox.textContent = "本机服务连接中断。请恢复服务后登录，账号记录不会被空白状态覆盖。";
+        errorBox.classList.remove("hidden");
+      }
       return;
     }
     if (response.status === 404) {
-      fallbackToLocal();
+      if (window.location.protocol === "file:") fallbackToLocal();
       return;
     }
     if (!response.ok) {
@@ -2302,7 +2558,12 @@
     if (!data || !data.user) {
       return;
     }
-    await enterApp();
+    currentUser = data.user;
+    try {
+      await enterApp();
+    } catch {
+      showGate();
+    }
   }
 
   function setupAccountGate() {
@@ -2364,9 +2625,10 @@
           return;
         }
         passwordInput.value = "";
+        currentUser = data.user;
         await enterApp();
-      } catch {
-        showError("网络连接失败，请稍后再试。");
+      } catch (error) {
+        showError(error instanceof TypeError ? "无法连接到账号服务。请双击项目中的 start-product.cmd 启动两个系统，再重试；输入的名字和密码仍在这里。" : error.message || "连接失败，请稍后再试。");
       } finally {
         busy = false;
         submitButton.disabled = false;
@@ -2375,10 +2637,13 @@
 
     if (logoutButton) {
       logoutButton.addEventListener("click", async () => {
+        if (stateSync && !(await stateSync.flush())) return;
         try {
-          await window.fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+          const response = await window.fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+          if (!response.ok) throw new Error("退出失败");
         } catch {
-          // 退出请求失败也回到门口；服务端状态不动
+          if (stateSync) stateSync.show("退出失败，请重试。已保存的记录不受影响。", true);
+          return;
         }
         returnToGate();
       });
