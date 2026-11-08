@@ -12,7 +12,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
 # 站点入口、两个应用、种子树和反馈接口
-COPY server.js state-sync.js app.js index.html style.css platform.html platform.js platform.css overlay.html overlay.js ./
+COPY server.js demand-graph.js state-sync.js app.js index.html style.css platform.html platform.js platform.css overlay.html overlay.js ./
 COPY site ./site
 COPY seed-trees ./seed-trees
 
