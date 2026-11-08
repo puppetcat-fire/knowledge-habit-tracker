@@ -3,6 +3,7 @@ const nodeCrypto = require("node:crypto");
 const fs = require("fs");
 const http = require("node:http");
 const path = require("path");
+const { createDemandGraph } = require("./demand-graph");
 
 const ROOT_DIR = __dirname;
 const SESSION_COOKIE = "kht_session";
@@ -16,6 +17,8 @@ const SITE_PUBLIC_FILES = new Map([
   ["/site.js", "site/site.js"],
   ["/wants/", "site/wants.html"],
   ["/wants/wants.js", "site/wants.js"],
+  ["/demand-graph/", "site/demand-graph.html"],
+  ["/demand-graph/graph.js", "site/graph.js"],
   ["/favicon.svg", "site/favicon.svg"],
   ["/robots.txt", "site/robots.txt"],
   ["/sitemap.xml", "site/sitemap.xml"]
@@ -49,6 +52,7 @@ const PUBLIC_REDIRECTS = new Map([
   ["/habit", "/habit/"],
   ["/platform", "/platform/"],
   ["/wants", "/wants/"],
+  ["/demand-graph", "/demand-graph/"],
   ["/platform.html", "/platform/"]
 ]);
 
@@ -287,6 +291,28 @@ function createApp(overrides = {}) {
     return res.json({ ok: true, user: { id: user.id, name: user.name } });
   });
 
+  const graph = createDemandGraph({
+    directory: path.join(config.dataDir, "wants"),
+    readJsonFile, writeJsonFile, readWants,
+    seed: JSON.parse(fs.readFileSync(SEED_NODE_FILE, "utf8")),
+    moderatorId: overrides.demandModeratorId || process.env.DEMAND_MODERATOR_ID
+  });
+  app.get("/api/state/demand-graph", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(graph.browse(req.query));
+  });
+  app.post("/api/state/demand-graph/moderate", (req, res) => {
+    const user = authenticate(config, req);
+    if (!graph.isModerator(user?.id)) return res.sendStatus(403);
+    const result = graph.moderate(req.body);
+    if (!result) return res.status(400).json({ ok: false });
+    return res.json({ ok: true, groupId: result });
+  });
+  app.get("/api/state/demand-graph/role", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ moderator: graph.isModerator(authenticate(config, req)?.id) });
+  });
+
   // This subpath uses the existing production account-state proxy rule.
   const wants = express.Router();
   wants.use((req, res, next) => {
@@ -307,7 +333,7 @@ function createApp(overrides = {}) {
     // The client retains this ID when retrying an uncertain submission.
     const existing = items.find((item) => item.id === input.id);
     if (existing) return res.json({ ok: true, want: existing });
-    const want = { ...input, createdAt: new Date().toISOString() };
+    const want = { ...input, tutorial: graph.snapshot(req.body.tutorialId), createdAt: new Date().toISOString() };
     writeJsonFile(file, [want, ...items]);
     return res.status(201).json({ ok: true, want });
   });
@@ -321,6 +347,28 @@ function createApp(overrides = {}) {
     const want = { ...items[index], ...input };
     items[index] = want;
     writeJsonFile(file, items);
+    return res.json({ ok: true, want });
+  });
+  wants.put("/:id/publication", (req, res) => {
+    const file = res.locals.wantsFile;
+    const items = readWants(file);
+    const want = items.find((item) => item.id === req.params.id);
+    if (!want) return res.status(404).json({ ok: false, message: "找不到这条需求。" });
+    const publication = graph.publish(want, req.body);
+    if (!publication) return res.status(400).json({ ok: false, message: "请检查公开内容、所选需求组和教程。" });
+    want.publication = publication;
+    writeJsonFile(file, items);
+    return res.json({ ok: true, want });
+  });
+  wants.delete("/:id/publication", (req, res) => {
+    const file = res.locals.wantsFile;
+    const items = readWants(file);
+    const want = items.find((item) => item.id === req.params.id);
+    if (!want) return res.status(404).json({ ok: false, message: "找不到这条需求。" });
+    if (want.publication) {
+      delete want.publication;
+      writeJsonFile(file, items);
+    }
     return res.json({ ok: true, want });
   });
   wants.delete("/:id", (req, res) => {
@@ -739,6 +787,7 @@ function validateWant(raw) {
   const link = typeof raw.link === "string" ? raw.link.trim() : "";
   const budget = raw.budget == null || raw.budget === "" ? null : raw.budget;
   const source = typeof raw.source === "string" ? raw.source.trim().slice(0, 240) : "";
+  const step = typeof raw.step === "string" ? raw.step.trim().slice(0, 240) : "";
   if (!title || title.length > 120 || details.length > 2000 || link.length > 1000) return null;
   if (budget !== null && (!Number.isFinite(budget) || budget < 0 || budget > 100000000)) return null;
   if (link) {
@@ -749,7 +798,7 @@ function validateWant(raw) {
     }
   }
   const status = ["open", "resolved", "paused"].includes(raw.status) ? raw.status : "open";
-  return { id: raw.id, title, details, link, budget, source, status };
+  return { id: raw.id, title, details, link, budget, source, step, status };
 }
 
 function writeJsonFile(filePath, value) {

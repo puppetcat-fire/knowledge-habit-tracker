@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>公开需求图谱 · humansneeds</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/site.css" />
+  </head>
+  <body class="wants-page">
+    <main class="wants-main">
+      <nav class="wants-nav" aria-label="站点导航">
+        <a href="/">humansneeds.com</a>
+        <a href="/wants/">我的想要</a>
+        <a href="/platform/">教程平台</a>
+        <a href="/needs/">INeedThis 历史图谱</a>
+      </nav>
+      <header>
+        <h1>公开需求图谱</h1>
+        <p>看看大家想解决什么，哪些条件不同，以及哪些教程能帮上忙。</p>
+      </header>
+      <form id="graph-search" class="wants-form">
+        <label>搜索需求<input name="q" type="search" maxlength="120" placeholder="用途、商品或教程名称" /></label>
+        <div class="wants-actions">
+          <button class="button primary">搜索</button>
+          <a href="/demand-graph/">全部需求</a>
+        </div>
+      </form>
+      <p id="graph-status" role="status">正在读取公开需求…</p>
+      <div id="graph-results"></div>
+      <section aria-labelledby="graph-tutorials-title">
+        <h2 id="graph-tutorials-title">浏览教程</h2>
+        <ul id="graph-tutorials" class="wants-list"></ul>
+      </section>
+    </main>
+    <script src="/demand-graph/graph.js" defer></script>
+  </body>
+</html>

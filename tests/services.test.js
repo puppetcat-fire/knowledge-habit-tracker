@@ -20,7 +20,8 @@ describe("services", () => {
   it("keeps each surface on its own path prefix", async () => {
     const homepage = await request(app).get("/");
     expect(homepage.status).toBe(200);
-    expect(homepage.text).toContain("渡鸦大人的工具站");
+    expect(homepage.text).toContain("记录我想要的东西");
+    expect(homepage.text).toContain('href="/demand-graph/"');
 
     expect((await request(app).get("/habit/")).text).toContain("点亮习惯记录器");
     expect((await request(app).get("/platform/")).text).toContain("知识共建共享平台");

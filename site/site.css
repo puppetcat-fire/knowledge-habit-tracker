@@ -828,3 +828,23 @@ a.tool-card:hover .tool-arrow {
 .wants-list .wants-actions {
   margin-top: .75rem;
 }
+
+.wants-main dialog {
+  width: min(100% - 2rem, 36rem);
+  max-height: calc(100% - 2rem);
+  padding: 1rem 1.5rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.wants-main dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.graph-group {
+  margin: 2rem 0;
+  padding: 1rem 0;
+  border-block-start: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}

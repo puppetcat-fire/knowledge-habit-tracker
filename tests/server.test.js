@@ -76,10 +76,80 @@ describe("server", () => {
     expect(response.text).toContain('src="app.js"');
   });
 
+  it("publishes an explicit projection, preserves the tutorial version and withdraws from all public views", async () => {
+    const privateApi = "/api/state/wants";
+    const graph = "/api/state/demand-graph";
+    const first = request.agent(app);
+    const second = request.agent(app);
+    await first.post("/api/register").send({ name: "graph-first", password: "test-password" }).expect(201);
+    await second.post("/api/register").send({ name: "graph-second", password: "test-password" }).expect(201);
+    const id = "3da3dd27-7d8c-4bc3-a258-4afce2519cd3";
+    const tutorialId = "linear-equation-move-terms";
+    const input = { id, title: "私人标题", budget: 863.77, details: "私人笔记", step: "私人材料",
+      link: "https://example.com/private", tutorialId };
+    await first.post(privateApi).send(input).expect(201);
+    await second.post(privateApi).send(input).expect(201);
+    expect((await request(app).get(graph)).body.groups).toEqual([]);
+    const publish = { title: "公开用途", intent: "considering", secondhand: "yes", specification: "规格 A",
+      tutorialId, tutorialUse: "alternative", tutorialStep: "公开材料" };
+    const url = privateApi + "/" + id + "/publication";
+    const published = (await first.put(url).send(publish).expect(200)).body.want.publication;
+    await second.put(url).send({ ...publish, specification: "规格 B", groupId: published.groupId }).expect(200);
+    const open = await request(app).get(graph).query({ tutorial: tutorialId }).expect(200);
+    expect(open.headers["cache-control"]).toBe("no-store");
+    expect(open.body.groups).toHaveLength(1);
+    expect(open.body.groups[0]).toMatchObject({ wanted: 2, considering: 2, resolved: 0 });
+    expect(open.body.groups[0].publications).toEqual(expect.arrayContaining([
+      expect.objectContaining({ specification: "规格 A", tutorialStep: "公开材料",
+        tutorial: expect.objectContaining({ id: tutorialId, version: "seed-1" }) }),
+      expect.objectContaining({ specification: "规格 B" })
+    ]));
+    for (const value of ["863.77", "私人标题", "私人笔记", "私人材料", "example.com", "graph-first", id]) {
+      expect(open.text).not.toContain(value);
+    }
+    await first.put(privateApi + "/" + id).send({ ...input, budget: 999, status: "resolved" }).expect(200);
+    expect((await request(app).get(graph)).body.groups[0]).toMatchObject({ wanted: 1, considering: 1, resolved: 1 });
+    await first.delete(url).expect(200);
+    expect((await first.get(privateApi)).body.wants[0]).toMatchObject({ budget: 999, details: "私人笔记" });
+    expect((await request(app).get(graph).query({ publication: published.id })).body.groups).toEqual([]);
+    expect((await request(app).get(graph)).body.groups[0]).toMatchObject({ wanted: 1, resolved: 0 });
+    await second.delete(privateApi + "/" + id).expect(200);
+    expect((await request(app).get(graph)).body.groups).toEqual([]);
+  });
+
   it("serves the knowledge platform under /platform/", async () => {
     const response = await request(app).get("/platform/");
     expect(response.status).toBe(200);
     expect(response.text).toContain("知识共建共享平台");
+  });
+
+  it("limits moderation to the designated account and keeps old links after a merge", async () => {
+    const ordinary = request.agent(app);
+    const registered = await ordinary.post("/api/register").send({ name: "graph-moderator", password: "test-password" }).expect(201);
+    app = createApp({ dataDir: tempDir, demandModeratorId: registered.body.user.id, rateLimitEnabled: false }).app;
+    const moderator = request.agent(app);
+    await moderator.post("/api/login").send({ name: "graph-moderator", password: "test-password" }).expect(200);
+    const privateApi = "/api/state/wants";
+    const graph = "/api/state/demand-graph";
+    const input = { title: "测试公开需求", intent: "want", secondhand: "unspecified" };
+    const shares = [];
+    for (const id of ["3da3dd27-7d8c-4bc3-a258-4afce2519cd3", "9da3dd27-7d8c-4bc3-a258-4afce2519cd3"]) {
+      await moderator.post(privateApi).send({ ...input, id }).expect(201);
+      const response = await moderator.put(privateApi + "/" + id + "/publication").send(input).expect(200);
+      shares.push(response.body.want.publication);
+    }
+    const merge = { action: "merge", groupId: shares[0].groupId, into: shares[1].groupId };
+    await request(app).post(graph + "/moderate").send(merge).expect(403);
+    await moderator.post(graph + "/moderate").send(merge).expect(200);
+    const merged = (await request(app).get(graph).query({ group: shares[0].groupId })).body.groups[0];
+    expect(merged.id).toBe(shares[1].groupId);
+    expect(merged.wanted).toBe(1);
+    expect(merged.publications).toHaveLength(2);
+    const split = await moderator.post(graph + "/moderate")
+      .send({ action: "split", groupId: merged.id, publicationId: shares[0].id }).expect(200);
+    const result = (await request(app).get(graph).query({ publication: shares[0].id })).body.groups[0];
+    expect(result.id).toBe(split.body.groupId);
+    expect(result.publications).toHaveLength(1);
   });
 
   it("redirects the old bookmarks instead of breaking them", async () => {

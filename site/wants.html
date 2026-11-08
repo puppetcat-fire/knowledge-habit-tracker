@@ -11,12 +11,12 @@
     <main class="wants-main">
       <nav class="wants-nav" aria-label="站点导航">
         <a href="/">humansneeds.com</a>
-        <a href="/needs/">需求图谱</a>
+        <a href="/demand-graph/">公开需求图谱</a>
         <a href="/platform/">教程平台</a>
       </nav>
       <header>
         <h1>我的想要</h1>
-        <p>想买但暂时买不起，或还没有合适的东西，都可以先记在这里。记录仅你自己可见。</p>
+        <p>想买但暂时买不起，或还没有合适的东西，都可以先记下来。新记录默认私人。</p>
       </header>
       <p id="wants-status" role="status">正在读取账号…</p>
       <form id="wants-account" class="wants-form" hidden>
@@ -33,7 +33,8 @@
           <p id="wants-source" hidden></p>
           <label>想要什么<input name="title" maxlength="120" placeholder="例如，一台能在出租屋练习的电子鼓" required /></label>
           <label>用途和要求<textarea name="details" maxlength="2000" rows="3" placeholder="想解决什么？哪些要求必须满足？"></textarea></label>
-          <label>可接受预算（元，可选）<input name="budget" type="number" min="0" max="100000000" step="0.01" /></label>
+          <label>私人预算（元，可选）<input name="budget" type="number" min="0" max="100000000" step="0.01" /></label>
+          <label id="wants-step" hidden>教程步骤或缺少的材料<input name="step" maxlength="240" /></label>
           <label>商品链接（可选）<input name="link" type="url" maxlength="1000" /></label>
           <label>状态<select name="status"><option value="open">还想要</option><option value="resolved">已解决</option><option value="paused">暂不考虑</option></select></label>
           <div class="wants-actions">
@@ -48,6 +49,27 @@
           <ul id="wants-list" class="wants-list"></ul>
         </section>
       </div>
+      <dialog id="wants-publish">
+        <form id="wants-public-form" class="wants-form">
+          <h2>公开需求</h2>
+          <p>图谱只展示这里填写的内容。私人预算、笔记和商品链接保留在你的账号里。</p>
+          <label>公开标题<input name="title" required maxlength="120" /></label>
+          <label>公开用途<textarea name="summary" maxlength="1200" rows="3"></textarea></label>
+          <label>必须满足的规格<input name="specification" maxlength="500" /></label>
+          <label>能等多久<input name="wait" maxlength="100" /></label>
+          <label>接受二手<select name="secondhand"><option value="unspecified">未说明</option><option value="yes">接受</option><option value="no">仅考虑新品</option></select></label>
+          <label>购买意向<select name="intent"><option value="want">先记录想要</option><option value="considering">条件合适会考虑购买</option></select></label>
+          <label>加入相似需求<select name="groupId" id="wants-public-groups"></select></label>
+          <label>关联公开教程<select name="tutorialId" id="wants-public-tutorials"></select></label>
+          <label>教程用途<select name="tutorialUse"><option value="choose">选购判断</option><option value="alternative">替代办法</option><option value="make">自己做</option><option value="use">使用与练习</option></select></label>
+          <label>公开的步骤或材料说明<input name="tutorialStep" maxlength="240" /></label>
+          <p id="wants-public-status" role="status"></p>
+          <div class="wants-actions">
+            <button class="button primary">确认公开</button>
+            <button class="button ghost" type="button" id="wants-public-cancel">取消</button>
+          </div>
+        </form>
+      </dialog>
     </main>
     <script src="/wants/wants.js" defer></script>
   </body>

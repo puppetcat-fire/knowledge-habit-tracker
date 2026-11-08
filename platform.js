@@ -72,6 +72,13 @@
     rebuildIndexes();
     bindEvents();
     render();
+    const link = new URLSearchParams((window.location.hash || "").slice(1));
+    const tutorial = getTutorialsForNode(link.get("tree"), link.get("node"))
+      .find((item) => item.id === link.get("tutorial"));
+    if (tutorial) {
+      expandedTutorialIds.add(tutorial.id);
+      openPlatformDetail(link.get("tree"), link.get("node"));
+    }
   }
 
   // 个人节点并进种子树后再建索引；布局数学只认合并后的树
@@ -832,8 +839,12 @@
   // 默认折叠：展开之前 method 不写进 DOM，折叠才能被断言而不是只做视觉隐藏
   function renderTutorialCard(tutorial) {
     const expanded = expandedTutorialIds.has(tutorial.id);
-    const source = encodeURIComponent(`${tutorial.title || tutorial.id}（${tutorial.id}）`);
-    const wantLink = LOCAL_ONLY ? "" : `<a class="platform-link" href="/wants/#source=${escapeAttribute(source)}">记为我想要</a>`;
+    const source = new URLSearchParams({ source: tutorial.title || tutorial.id, tutorial: tutorial.id });
+    const filter = new URLSearchParams({ tutorial: tutorial.id });
+    const wantLink = LOCAL_ONLY ? "" : `<div class="tutorial-head">
+      <a class="platform-link" href="/wants/#${escapeAttribute(source.toString())}">记为我想要</a>
+      <a class="platform-link" href="/demand-graph/?${escapeAttribute(filter.toString())}">查看相关需求</a>
+    </div>`;
     const method = expanded ? `<div class="record-text">${escapeHtml(tutorial.method || "")}</div>${wantLink}` : "";
     return `
       <article class="record-item">
