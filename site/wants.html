@@ -7,16 +7,30 @@
     <title>我的想要 · humansneeds</title>
     <link rel="stylesheet" href="/site.css" />
   </head>
-  <body class="wants-page">
-    <main class="wants-main">
-      <nav class="wants-nav" aria-label="站点导航">
-        <a href="/">humansneeds.com</a>
+  <body class="has-rail">
+    <a class="skip-link" href="#main">跳到内容</a>
+    <aside class="site-rail" aria-label="站点导航">
+      <a class="rail-brand" href="/"><span class="rail-mark" aria-hidden="true">◐</span><span>humansneeds<span class="rail-dot">.</span>com</span></a>
+      <nav class="rail-nav" aria-label="站点页面">
+        <a href="/habit/">时间与习惯</a>
+        <a href="/platform/">点亮知识</a>
+        <a href="/wants/" aria-current="page">我的想要</a>
         <a href="/demand-graph/">公开需求图谱</a>
-        <a href="/platform/">教程平台</a>
       </nav>
-      <header>
+    </aside>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="humansneeds 首页"><span class="brand-mark" aria-hidden="true">◐</span><span class="brand-text">humansneeds<span class="brand-dot">.</span>com</span></a>
+      <nav class="site-nav" aria-label="主导航">
+        <a href="/habit/">时间与习惯</a>
+        <a href="/platform/">点亮知识</a>
+        <a href="/wants/" aria-current="page">我的想要</a>
+        <a href="/demand-graph/">公开需求</a>
+      </nav>
+    </header>
+    <main id="main" class="wants-main">
+      <header class="hero page-hero">
         <h1>我的想要</h1>
-        <p>想买但暂时买不起，或还没有合适的东西，都可以先记下来。新记录默认私人。</p>
+        <p class="lead">教程里缺的材料、实践中想解决的卡点，或暂时买不起的东西，都可以记在这里。新记录默认私人。</p>
       </header>
       <p id="wants-status" role="status">正在读取账号…</p>
       <form id="wants-account" class="wants-form" hidden>
@@ -27,7 +41,7 @@
           <button class="button ghost" name="mode" value="register">注册</button>
         </div>
       </form>
-      <div id="wants-workspace" hidden>
+      <div id="wants-workspace" class="wants-workspace" hidden>
         <form id="wants-form" class="wants-form">
           <h2 id="wants-form-title">记录一件想要的东西</h2>
           <p id="wants-source" hidden></p>

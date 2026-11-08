@@ -78,6 +78,11 @@
       elements.hubToggle.checked = state.settings.hubConnected;
     }
     render();
+    const practiceId = new URLSearchParams((window.location.hash || "").slice(1)).get("practice");
+    if (practiceId && state.events.some((event) => event.id === practiceId && event.source !== "quick-note")) {
+      setActivePage("habit");
+      document.getElementById("practice-" + practiceId)?.scrollIntoView();
+    }
     startTimerTicker();
   }
 
@@ -651,6 +656,13 @@
     saveState();
     render();
     showMessage(elements.timerReport, newEvent.report, true);
+    if (canRecordPracticeWant()) {
+      const link = document.createElement("a");
+      link.className = "action-button";
+      link.href = practiceWantUrl(newEvent);
+      link.textContent = "记下这次缺的东西";
+      elements.timerReport.append(document.createElement("br"), link);
+    }
   }
 
   function startTimerTicker() {
@@ -774,11 +786,12 @@
               : "手动";
         const lightUpText = escapeHtml(resolveEventLightUpBadge(event));
         return `
-          <article class="done-item">
+          <article class="done-item" id="practice-${escapeAttribute(event.id)}">
             <h4>${escapeHtml(event.title)}</h4>
             <div class="done-meta">${formatDateTime(event.createdAt)} · ${sourceText}${durationText}${habitText} · ${lightUpText}</div>
             ${log}
             <div class="item-actions">
+              ${canRecordPracticeWant() ? `<a class="action-button" href="${escapeAttribute(practiceWantUrl(event))}">记下这次缺的东西</a>` : ""}
               <button class="action-button" type="button" data-action="edit" data-source="event" data-id="${event.id}">编辑</button>
               <button class="action-button danger" type="button" data-action="delete" data-source="event" data-id="${event.id}">删除</button>
             </div>
@@ -786,6 +799,15 @@
         `;
       })
       .join("");
+  }
+
+  function canRecordPracticeWant() {
+    return Boolean(currentUser && !guestMode && !LOCAL_ONLY);
+  }
+
+  function practiceWantUrl(event) {
+    const params = new URLSearchParams({ practice: event.title, practiceId: event.id });
+    return "/wants/#" + params;
   }
 
   function renderQuickNoteList() {

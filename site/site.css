@@ -762,22 +762,45 @@ a.tool-card:hover .tool-arrow {
     animation: none !important;
   }
 }
-.wants-page {
-  display: block;
+.hero-systems,
+.wants-workspace {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.hero-systems {
+  margin-top: 2rem;
+  align-items: stretch;
+}
+
+.system-card h2 {
+  font-size: clamp(1.45rem, 3vw, 2.1rem);
+}
+
+.system-card p {
+  margin: 0;
+}
+
+.rail-nav [aria-current="page"],
+.site-nav [aria-current="page"] {
+  color: var(--primary);
+  font-weight: 700;
 }
 
 .wants-main {
-  width: min(100% - 2rem, 45rem);
-  margin: 0 auto;
-  padding: 2rem 0 4rem;
+  padding-bottom: 4rem;
 }
 
-.wants-main h1 {
-  margin: 2rem 0 .5rem;
-  font-size: clamp(2rem, 7vw, 4rem);
+.page-hero {
+  padding-bottom: 2rem;
 }
 
-.wants-nav,
+.wants-workspace > section {
+  margin-top: 1.5rem;
+}
+
 .wants-actions {
   display: flex;
   flex-wrap: wrap;
@@ -789,6 +812,18 @@ a.tool-card:hover .tool-arrow {
   display: grid;
   gap: 1rem;
   margin: 1.5rem 0 2.5rem;
+}
+
+#wants-account,
+#graph-search {
+  max-width: 35rem;
+}
+
+.wants-workspace > form {
+  padding: clamp(1rem, 3vw, 1.75rem);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
 }
 
 .wants-main [hidden] {
@@ -805,9 +840,9 @@ a.tool-card:hover .tool-arrow {
   padding: .7rem;
   font: inherit;
   color: inherit;
-  background: transparent;
-  border: 1px solid currentColor;
-  border-radius: .3rem;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
 }
 
 .wants-list {
@@ -817,7 +852,7 @@ a.tool-card:hover .tool-arrow {
 }
 
 .wants-list li {
-  border-top: 1px solid currentColor;
+  border-top: 1px solid var(--line);
   padding: 1rem 0;
 }
 
@@ -844,7 +879,16 @@ a.tool-card:hover .tool-arrow {
 
 .graph-group {
   margin: 2rem 0;
-  padding: 1rem 0;
-  border-block-start: 1px solid var(--line);
+  padding: clamp(1rem, 3vw, 1.75rem);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .hero-systems,
+  .wants-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

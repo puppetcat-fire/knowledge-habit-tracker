@@ -7,17 +7,32 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/site.css" />
   </head>
-  <body class="wants-page">
-    <main class="wants-main">
-      <nav class="wants-nav" aria-label="站点导航">
-        <a href="/">humansneeds.com</a>
+  <body class="has-rail">
+    <a class="skip-link" href="#main">跳到内容</a>
+    <aside class="site-rail" aria-label="站点导航">
+      <a class="rail-brand" href="/"><span class="rail-mark" aria-hidden="true">◐</span><span>humansneeds<span class="rail-dot">.</span>com</span></a>
+      <nav class="rail-nav" aria-label="站点页面">
+        <a href="/habit/">时间与习惯</a>
+        <a href="/platform/">点亮知识</a>
         <a href="/wants/">我的想要</a>
-        <a href="/platform/">教程平台</a>
+        <a href="/demand-graph/" aria-current="page">公开需求图谱</a>
         <a href="/needs/">INeedThis 历史图谱</a>
       </nav>
-      <header>
+    </aside>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="humansneeds 首页"><span class="brand-mark" aria-hidden="true">◐</span><span class="brand-text">humansneeds<span class="brand-dot">.</span>com</span></a>
+      <nav class="site-nav" aria-label="主导航">
+        <a href="/habit/">时间与习惯</a>
+        <a href="/platform/">点亮知识</a>
+        <a href="/wants/">我的想要</a>
+        <a href="/demand-graph/" aria-current="page">公开需求</a>
+        <a href="/needs/">历史图谱</a>
+      </nav>
+    </header>
+    <main id="main" class="wants-main">
+      <header class="hero page-hero">
         <h1>公开需求图谱</h1>
-        <p>看看大家想解决什么，哪些条件不同，以及哪些教程能帮上忙。</p>
+        <p class="lead">看看大家在做什么、还缺什么，哪些教程和办法能帮上忙。</p>
       </header>
       <form id="graph-search" class="wants-form">
         <label>搜索需求<input name="q" type="search" maxlength="120" placeholder="用途、商品或教程名称" /></label>

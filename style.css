@@ -961,3 +961,7 @@ a.icon-button {
   font-size: 13px;
   color: var(--muted);
 }
+.done-item a.action-button,
+.report a.action-button {
+  text-decoration: none;
+}

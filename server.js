@@ -333,7 +333,13 @@ function createApp(overrides = {}) {
     // The client retains this ID when retrying an uncertain submission.
     const existing = items.find((item) => item.id === input.id);
     if (existing) return res.json({ ok: true, want: existing });
-    const want = { ...input, tutorial: graph.snapshot(req.body.tutorialId), createdAt: new Date().toISOString() };
+    const practice = typeof req.body.practice === "string" ? req.body.practice.trim().slice(0, 120) : "";
+    const practiceId = typeof req.body.practiceId === "string" ? req.body.practiceId.slice(0, 120) : "";
+    const want = {
+      ...input, tutorial: graph.snapshot(req.body.tutorialId),
+      practice: practice && practiceId ? { id: practiceId, title: practice } : null,
+      createdAt: new Date().toISOString()
+    };
     writeJsonFile(file, [want, ...items]);
     return res.status(201).json({ ok: true, want });
   });

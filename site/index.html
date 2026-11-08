@@ -3,17 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>humansneeds · 先说你想要什么</title>
+    <title>humansneeds · 时间与习惯管理、点亮知识共创</title>
     <meta
       name="description"
-      content="记录想买但暂时买不起的东西，浏览需求图谱，从教程寻找合适的办法。"
+      content="管理时间与习惯，实践并点亮知识。把做事时遇到的真实需求记下来，一起找办法。"
     />
     <meta name="theme-color" content="#f4f0e6" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="humansneeds · 先说你想要什么" />
+    <meta property="og:title" content="humansneeds · 时间与习惯管理、点亮知识共创" />
     <meta
       property="og:description"
-      content="记录想买但暂时买不起的东西，浏览需求图谱，从教程寻找合适的办法。"
+      content="管理时间与习惯，实践并点亮知识。把做事时遇到的真实需求记下来，一起找办法。"
     />
     <meta property="og:url" content="https://humansneeds.com/" />
     <link rel="canonical" href="https://humansneeds.com/" />
@@ -29,7 +29,9 @@
         <span>humansneeds<span class="rail-dot">.</span>com</span>
       </a>
       <nav class="rail-nav" aria-label="页面内的章节">
-        <a href="/wants/">我的想要</a>
+        <a href="/habit/">时间与习惯</a>
+        <a href="/platform/">点亮知识</a>
+        <a href="#needs">需求与解决办法</a>
         <a href="#tools">工具</a>
         <a href="#about">关于</a>
         <a href="#feedback">反馈</a>
@@ -37,7 +39,7 @@
       <div class="rail-foot">
         <a href="https://github.com/puppetcat-fire" rel="me noopener" target="_blank">GitHub ↗</a>
         <a href="mailto:xiaoboren0@gmail.com">写信</a>
-        <p>想要什么，先记下来。</p>
+        <p>记录时间，点亮知识。</p>
       </div>
     </aside>
 
@@ -47,7 +49,9 @@
         <span class="brand-text">humansneeds<span class="brand-dot">.</span>com</span>
       </a>
       <nav class="site-nav" aria-label="主导航">
-        <a href="/wants/">我的想要</a>
+        <a href="/habit/">时间与习惯</a>
+        <a href="/platform/">点亮知识</a>
+        <a href="#needs">需求</a>
         <a href="#tools">工具</a>
         <a href="#about">关于</a>
         <a href="#feedback">反馈</a>
@@ -58,19 +62,35 @@
     <main id="main">
       <section class="hero">
         <p class="eyebrow">渡鸦大人 / puppetcat-fire</p>
-        <h1>你想要什么？</h1>
-        <p class="lead">
-          想买但暂时买不起，或市面上还没有合适的东西，都可以先记下来。说清楚你想解决什么，再去找合适的教程和办法。
-        </p>
+        <h1>记录时间，点亮知识。</h1>
+        <p class="lead">把想做的事做起来，把做过的事留下来。看看别人怎么做，也把自己的经验传下去。</p>
+        <div class="hero-systems" aria-label="两个主系统">
+          <a class="tool-card system-card" href="/habit/">
+            <span class="tool-kicker">左手</span>
+            <h2>时间与习惯管理</h2>
+            <p>开始一次计时，跟进你的习惯，回看时间花在了哪里。</p>
+            <span class="tool-tags"><span>计时</span><span>习惯</span><span>事件记录</span></span>
+            <span class="tool-arrow" aria-hidden="true">→</span>
+          </a>
+          <a class="tool-card system-card" href="/platform/">
+            <span class="tool-kicker">右手</span>
+            <h2>点亮知识共创共享</h2>
+            <p>在知识图谱里找目标和方法。亲自试过以后，留下证据和做法。</p>
+            <span class="tool-tags"><span>知识图谱</span><span>教程</span><span>实践与点亮</span></span>
+            <span class="tool-arrow" aria-hidden="true">→</span>
+          </a>
+        </div>
+      </section>
+
+      <section id="needs" class="section">
+        <header class="section-head">
+          <h2>做着做着，发现还缺什么</h2>
+          <p class="section-lead">教程里缺了材料，实践里遇到卡点，或者想买的东西暂时买不起，都可以先记下来。愿意公开时，让其他人看到需求，一起找教程和解决办法。</p>
+        </header>
         <div class="hero-actions">
           <a class="button primary" href="/wants/">记录我想要的东西</a>
           <a class="button ghost" href="/demand-graph/">浏览需求图谱</a>
         </div>
-        <ul class="principles" aria-label="这个站点的原则">
-          <li>需求默认私人</li>
-          <li>预算可留空</li>
-          <li>从教程发现替代办法</li>
-        </ul>
       </section>
 
       <section id="tools" class="section">
@@ -87,36 +107,8 @@
           需要“还没上线”时用 <div class="tool-card is-soon">，别留空链接。
         -->
         <div class="tool-grid">
-          <a class="tool-card tool-card-wide" href="/habit/">
-            <span class="tool-kicker">01 · 习惯</span>
-            <h3>点亮 · 习惯记录器</h3>
-            <p>
-              一次只维护一个习惯。计时、事件、点亮和备份都留在本机，随时可以导出 JSON；
-              重复发生的事会浮成知识节点的候选。
-            </p>
-            <span class="tool-tags">
-              <span>本地优先</span>
-              <span>单任务计时</span>
-              <span>可导出</span>
-            </span>
-            <span class="tool-arrow" aria-hidden="true">→</span>
-          </a>
-
-          <a class="tool-card" href="/platform/">
-            <span class="tool-kicker">02 · 知识</span>
-            <h3>知识共建共享平台</h3>
-            <p>
-              节点上挂的是人真正做过的一次。可以对着节点写一段、放一张图，也可以先看看别人怎么做。
-            </p>
-            <span class="tool-tags">
-              <span>INTP 式共建</span>
-              <span>节点</span>
-            </span>
-            <span class="tool-arrow" aria-hidden="true">→</span>
-          </a>
-
           <a class="tool-card" href="/needs/">
-            <span class="tool-kicker">03 · 需要</span>
+            <span class="tool-kicker">历史需求</span>
             <h3>INeedThis · 需求图谱</h3>
             <p>
               匿名写下「我是谁」和「我需要什么」，重复的需要会被聚成公开信号。同域下的独立应用，单独一套数据。
@@ -129,7 +121,7 @@
           </a>
 
           <a class="tool-card" href="/tools/perler-beads/">
-            <span class="tool-kicker">04 · 手作</span>
+            <span class="tool-kicker">手作</span>
             <h3>拼豆图纸</h3>
             <p>把一张像素图摊成能照着摆的拼豆图纸，在浏览器里直接排。</p>
             <span class="tool-tags">
@@ -140,7 +132,7 @@
           </a>
 
           <a class="tool-card" href="/tools/">
-            <span class="tool-kicker">05 · 小东西</span>
+            <span class="tool-kicker">小东西</span>
             <h3>小工具货架</h3>
             <p>拼豆社区、待办清单、MBTI、灵魂宠物、诡秘途径、调香师、封面生成、主观深聊，都在这一页。</p>
             <span class="tool-tags">
@@ -166,7 +158,7 @@
             当 AI 让生产更容易，谁想要什么就更重要。这里从人的需求出发，让教程作者分享办法，让商家和制作者知道什么值得做。
           </p>
           <p>
-            你可以先记录需求，再从教程找办法，用点亮记录亲手做过的事。平台计划在有广告收入后，随机抽取用户发放广告收益。
+            电商从实践和教程里的真实需求长出来。平台也计划把广告收入转成用户能用的产品，并围绕反复出现的需求做自营产品。
           </p>
         </div>
         <dl class="about-facts">

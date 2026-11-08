@@ -68,9 +68,10 @@
     }
     form.elements.namedItem("status").value = want?.status || "open";
     const label = want ? want.tutorial?.title || want.source : source;
+    const practice = want ? want.practice?.title : context.get("practice");
     document.getElementById("wants-step").hidden = !(want?.tutorial || (!want && context.get("tutorial")));
-    sourceLabel.textContent = label ? "来自教程 " + label : "";
-    sourceLabel.hidden = !label;
+    sourceLabel.textContent = [label && "来自教程 " + label, practice && "来自实践 " + practice].filter(Boolean).join(" · ");
+    sourceLabel.hidden = !label && !practice;
     cancel.hidden = !want;
     document.getElementById("wants-form-title").textContent = want ? "编辑需求" : "记录一件想要的东西";
   }
@@ -120,6 +121,12 @@
       const detail = document.createElement("p");
       detail.textContent = [labels[want.status], want.budget === null ? "" : "预算 ¥" + want.budget, want.details, want.source].filter(Boolean).join(" · ");
       row.append(title, detail);
+      if (want.practice) {
+        const practice = document.createElement("a");
+        practice.href = "/habit/#" + new URLSearchParams({ practice: want.practice.id });
+        practice.textContent = "回看实践 " + want.practice.title;
+        row.append(practice);
+      }
       if (want.step) {
         const step = document.createElement("p");
         step.textContent = "教程步骤或材料 " + want.step;
@@ -204,7 +211,8 @@
       const budget = fields.budget === "" ? null : Number(fields.budget);
       const url = editing ? endpoint + "/" + editing.id : endpoint;
       const { want } = await api(url, editing ? "PUT" : "POST", {
-        ...fields, budget, id: editing?.id || draftId, source, tutorialId: context.get("tutorial")
+        ...fields, budget, id: editing?.id || draftId, source, tutorialId: context.get("tutorial"),
+        practice: context.get("practice"), practiceId: context.get("practiceId")
       });
       items = editing ? items.map((item) => item.id === want.id ? want : item)
         : [want, ...items.filter((item) => item.id !== want.id)];

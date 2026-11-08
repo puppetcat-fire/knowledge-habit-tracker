@@ -41,6 +41,15 @@ describe("the personal site homepage", () => {
     expect(document.title).toContain("humansneeds");
   });
 
+  it("gives the two product systems equal prominence before demand entry", () => {
+    loadSite(() => jsonResponse({ status: "ok" }));
+    expect(Array.from(document.querySelectorAll(".hero-systems > a"), (link) => link.getAttribute("href")))
+      .toEqual(["/habit/", "/platform/"]);
+    expect(document.querySelector('.hero a[href="/wants/"]')).toBeNull();
+    expect(document.querySelector('#needs a[href="/wants/"]')).not.toBeNull();
+    expect(document.querySelector('#needs a[href="/demand-graph/"]')).not.toBeNull();
+  });
+
   it("carries a sidebar for section navigation on wide screens", () => {
     loadSite(() => jsonResponse({ status: "ok" }));
 

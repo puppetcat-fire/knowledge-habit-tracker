@@ -86,6 +86,7 @@ describe("server", () => {
     const id = "3da3dd27-7d8c-4bc3-a258-4afce2519cd3";
     const tutorialId = "linear-equation-move-terms";
     const input = { id, title: "私人标题", budget: 863.77, details: "私人笔记", step: "私人材料",
+      practice: "私人实践", practiceId: "private-event-id",
       link: "https://example.com/private", tutorialId };
     await first.post(privateApi).send(input).expect(201);
     await second.post(privateApi).send(input).expect(201);
@@ -104,13 +105,15 @@ describe("server", () => {
         tutorial: expect.objectContaining({ id: tutorialId, version: "seed-1" }) }),
       expect.objectContaining({ specification: "规格 B" })
     ]));
-    for (const value of ["863.77", "私人标题", "私人笔记", "私人材料", "example.com", "graph-first", id]) {
+    for (const value of ["863.77", "私人标题", "私人笔记", "私人材料", "私人实践", "private-event-id", "example.com", "graph-first", id]) {
       expect(open.text).not.toContain(value);
     }
     await first.put(privateApi + "/" + id).send({ ...input, budget: 999, status: "resolved" }).expect(200);
     expect((await request(app).get(graph)).body.groups[0]).toMatchObject({ wanted: 1, considering: 1, resolved: 1 });
     await first.delete(url).expect(200);
-    expect((await first.get(privateApi)).body.wants[0]).toMatchObject({ budget: 999, details: "私人笔记" });
+    expect((await first.get(privateApi)).body.wants[0]).toMatchObject({
+      budget: 999, details: "私人笔记", practice: { id: "private-event-id", title: "私人实践" }
+    });
     expect((await request(app).get(graph).query({ publication: published.id })).body.groups).toEqual([]);
     expect((await request(app).get(graph)).body.groups[0]).toMatchObject({ wanted: 1, resolved: 0 });
     await second.delete(privateApi + "/" + id).expect(200);
