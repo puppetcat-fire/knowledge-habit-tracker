@@ -3,7 +3,8 @@ const globals = require("globals");
 
 module.exports = [
   {
-    ignores: ["node_modules/**", "prototypes/open-design-trial/.checks/**"]
+    // The community review concatenates script fragments and has a separate audit suite.
+    ignores: ["node_modules/**", "prototypes/open-design-trial/.checks/**", "prototypes/community-review/**"]
   },
   {
     files: ["**/*.js"],

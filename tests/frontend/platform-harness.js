@@ -52,6 +52,7 @@ function loadPlatform({ seedState = null, customNodes = null, withSeedBundle = t
 
   // platform.js 在求值时读取该开关；前端测试一律走本地模式，不连服务端
   globalThis.__KHT_LOCAL_ONLY__ = true;
+  require("../../product-rules");
 
   const platformPath = path.join(__dirname, "../../platform.js");
   delete require.cache[require.resolve(platformPath)];

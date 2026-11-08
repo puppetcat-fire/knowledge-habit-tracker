@@ -41,6 +41,7 @@ Thumbs.db
 
 # Build artifacts
 *.apk
+/output/playwright/
 
 # Offline packages and archives
 knowledge-habit-tracker-offline-*/

@@ -28,6 +28,27 @@
 
 脚本在 `/usr/local/bin/humansneeds-site-deploy`，unit 文件在 `/etc/systemd/system/humansneeds-site-deploy.{service,timer}`。
 
+合入知识与备份功能前，若线上 Nginx 用路径白名单区分主站与独立订单服务，需要把下列新主站 API 加入原有转发到 `3100` 的规则，并先通过 `nginx -t`。旧的订单、测试、拼豆接口及 `/needs/` 保持原有路由。
+
+```text
+/api/account
+/api/holders
+/api/knowledge-demand-answers
+/api/knowledge-demand-bookmarks
+/api/knowledge-demands
+/api/practice-bookmarks
+/api/practice-comments
+/api/practice-replies
+/api/product-wants
+/api/profile
+/api/profiles
+/api/trees
+/api/tutorial-search
+/api/tutorials
+```
+
+上面的每个路径都包括其子路径。上线前以测试账号验收教程版本、备份导出和恢复、实践留言，以及既有私人需求和反馈隔离。可选的 `/review/` 由本地社区验收启动入口提供。
+
 ## 1. 机器上放代码
 
 ```bash

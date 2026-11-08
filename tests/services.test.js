@@ -47,6 +47,24 @@ describe("services", () => {
     }
   });
 
+  it("serves the integrated account, knowledge and community assets on the same origin", async () => {
+    const visitor = request.agent(app);
+    expect((await visitor.get("/habit?view=timer")).headers.location).toBe("/habit/?view=timer");
+    expect((await visitor.get("/platform?view=atlas")).headers.location).toBe("/platform/?view=atlas");
+    await visitor.get("/habit/account-backup.js").expect(200);
+    await visitor.get("/platform/personal-home.js").expect(200);
+    const product = await visitor.get("/platform/product.html").expect(200);
+    expect(product.text).toContain("关联教程");
+    await visitor.get("/platform/product.js").expect(200);
+    for (const route of ["/habit/runtime-config.js", "/platform/runtime-config.js"]) {
+      expect((await visitor.get(route).expect(200)).text).toContain('"habitUrl":"/habit/","platformUrl":"/platform/"');
+    }
+    await visitor.post("/api/register").send({ name: "同源读者", password: "secret-123" }).expect(201);
+    await visitor.get("/api/tutorials").expect(200);
+    await visitor.get("/api/account/export").expect(200);
+    await visitor.get("/api/state/wants").expect(200);
+  });
+
   it("shares accounts, sessions and state through one data directory", async () => {
     const register = await request(app).post("/api/register").send({ name: "共享用户", password: "secret-123" });
     expect(register.status).toBe(201);

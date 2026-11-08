@@ -1,12 +1,12 @@
 const { loadApp } = require("./harness");
 
-const PLATFORM_ORIGIN = "/platform/";
+const PLATFORM_PATH = "/platform/";
 
 describe("the habit page is habit-only", () => {
   it("keeps the four daily nav buttons", () => {
     loadApp();
 
-    expect(document.querySelectorAll(".nav .nav-button")).toHaveLength(4);
+    expect(document.querySelectorAll(".nav button[data-page-target]")).toHaveLength(4);
   });
 
   it("carries the site brand as the way back to the homepage", () => {
@@ -41,16 +41,16 @@ describe("the habit page is habit-only", () => {
     expect(document.getElementById("platform-mine")).toBeNull();
   });
 
-  it("links every platform entry to the standalone platform service", () => {
+  it("links every platform entry to the same-origin knowledge page", () => {
     loadApp();
 
     const entry = document.getElementById("platform-entry");
     const overview = document.getElementById("overview-platform-entry");
     const change = document.getElementById("node-aim-change");
 
-    [entry, overview, change].forEach((element) => {
+    [entry, overview, change, document.getElementById("sidebar-platform-entry")].forEach((element) => {
       expect(element.tagName).toBe("A");
-      expect(element.getAttribute("href")).toBe(PLATFORM_ORIGIN);
+      expect(element.getAttribute("href")).toBe(PLATFORM_PATH);
     });
 
     expect(entry.textContent).toContain("知识共建共享平台");

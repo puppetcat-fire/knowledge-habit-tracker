@@ -52,6 +52,7 @@ function loadApp({ seedState = null, withSeedBundle = true, customNodes = null }
 
   // app.js 在求值时读取该开关；前端测试一律走本地模式，不连服务端
   globalThis.__KHT_LOCAL_ONLY__ = true;
+  require("../../product-rules");
 
   const appPath = path.join(__dirname, "../../app.js");
   delete require.cache[require.resolve(appPath)];

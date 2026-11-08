@@ -1,0 +1,15 @@
+const crypto=require('node:crypto');
+const targetKeys=['kind','treeId','nodeId','originId','title','goal','five','domain','branch','ownership','ownerId','ownerName','version','sourceVersion'];
+function pathSnapshot(p){return {title:p.title,targets:p.targets,...(p.sourcePath?{sourcePath:p.sourcePath}:{})}}
+function validatePathSource(p){if(!p||Object.keys(p).some(k=>!['id','version','authorId','authorName','title'].includes(k))||!/^path-[0-9a-f]{32}$/.test(p.id)||!/^[0-9a-f]{64}$/.test(p.version)||!/^[A-Za-z0-9_-]{1,64}$/.test(p.authorId)||typeof p.authorName!=='string'||typeof p.title!=='string')throw Error('Invalid path provenance')}
+function validatePathBookmarks(list){
+ if(!Array.isArray(list))throw Error('Invalid path bookmarks');const seen=new Set();
+ for(const p of list){if(!p||Object.keys(p).some(k=>!['id','authorId','authorName','title','version','createdAt','targets','sourcePath'].includes(k))||['id','authorId','authorName','title','version'].some(k=>typeof p[k]!=='string'||!p[k])||!/^path-[0-9a-f]{32}$/.test(p.id)||!/^[A-Za-z0-9_-]{1,64}$/.test(p.authorId)||!/^[0-9a-f]{64}$/.test(p.version)||!Number.isFinite(p.createdAt)||!Array.isArray(p.targets)||!p.targets.length)throw Error('Invalid path bookmark');const key=JSON.stringify([p.id,p.version]);if(seen.has(key))throw Error('Duplicate path bookmark');seen.add(key);
+  for(const t of p.targets)if(!t||Object.keys(t).some(k=>!targetKeys.includes(k))||!['catalog','personal-public'].includes(t.kind)||['treeId','nodeId','title','goal','five','domain','branch','version'].some(k=>typeof t[k]!=='string')||!Number.isInteger(t.sourceVersion)||t.sourceVersion<1||(t.kind==='catalog'?t.ownership!=='group'||t.ownerId!==null:t.ownership!=='personal'||typeof t.ownerId!=='string'||typeof t.ownerName!=='string'))throw Error('Invalid bookmarked target');
+  if(p.sourcePath)validatePathSource(p.sourcePath);
+  if(crypto.createHash('sha256').update(JSON.stringify(pathSnapshot(p))).digest('hex')!==p.version)throw Error('Changed path bookmark snapshot');
+ }
+ return list;
+}
+function validateCopiedPath(p){validatePathBookmarks([p.sourcePathSnapshot]);if(!Array.isArray(p.targetRefs)||!p.targetRefs.length)throw Error('Invalid copied path targets');for(const r of p.targetRefs){if(!r||!['local','public'].includes(r.kind)||Object.keys(r).some(k=>!['kind','nodeId','target'].includes(k)))throw Error('Invalid copied target reference');if(r.kind==='local'){if(typeof r.nodeId!=='string'||!r.nodeId||r.target!==undefined)throw Error('Invalid local path target')}else {if(r.nodeId!==undefined)throw Error('Invalid public path target');const t=r.target;if(!t||Object.keys(t).some(k=>!targetKeys.includes(k))||!['catalog','personal-public'].includes(t.kind)||['treeId','nodeId','title','goal','five','domain','branch','version'].some(k=>typeof t[k]!=='string')||!Number.isInteger(t.sourceVersion)||t.sourceVersion<1)throw Error('Invalid public path target')}}}
+module.exports={validatePathBookmarks,validateCopiedPath,validatePathSource,pathSnapshot};

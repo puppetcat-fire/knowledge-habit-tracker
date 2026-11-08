@@ -5,6 +5,7 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "node server.js",
+    "start:community": "node scripts/start-community.cjs",
     "dev": "nodemon server.js",
     "desktop": "electron electron/main.js",
     "seed:bundle": "node scripts/build-seed-bundle.js",
@@ -15,9 +16,10 @@
     "trial:check": "node scripts/trial-browser-check.cjs",
     "trial:test": "vitest run tests/trial",
     "test": "vitest run",
+    "test:community": "vitest run --configLoader native --config prototypes/community-review/integration/audit.config.cjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "check": "node scripts/check.js"
   },
   "keywords": [
     "personal-site",

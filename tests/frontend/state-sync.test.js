@@ -24,8 +24,11 @@ describe("account persistence under interruptions", () => {
     window.fetch = vi.fn().mockResolvedValueOnce(response(null)).mockRejectedValueOnce(new Error("连接中断"));
     const client = new window.KHTStateSync("alice");
     expect(await client.load()).toBeNull();
+    expect(document.getElementById("save-status").classList.contains("hidden")).toBe(true);
     client.queue({ version: 3, events: [{ id: "work" }] });
+    expect(document.getElementById("save-status").classList.contains("hidden")).toBe(true);
     expect(await client.flush()).toBe(false);
+    expect(document.getElementById("save-status").classList.contains("hidden")).toBe(false);
     expect(localStorage.getItem("knowledge-habit-pending:alice")).toContain("work");
     expect(document.getElementById("save-retry").hidden).toBe(false);
 
@@ -36,6 +39,7 @@ describe("account persistence under interruptions", () => {
     expect(await new window.KHTStateSync("bob").load()).toBeNull();
     window.fetch.mockResolvedValueOnce(response(null, "r1"));
     expect(await reopened.flush()).toBe(true);
+    expect(document.getElementById("save-status").classList.contains("hidden")).toBe(true);
     expect(localStorage.getItem("knowledge-habit-pending:alice")).toBeNull();
     expect(window.fetch.mock.calls.at(-1)[1].headers["If-Match"]).toBe("r0");
   });
@@ -58,6 +62,19 @@ describe("account persistence under interruptions", () => {
     expect(document.getElementById("save-export").hidden).toBe(false);
     expect(JSON.parse(localStorage.getItem(client.key))).toEqual(draft);
     expect(window.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears a recovered draft whose exact contents were already saved before the receipt was lost", async () => {
+    const state = { version: 3, events: [{ id: "committed" }] };
+    localStorage.setItem("knowledge-habit-pending:alice", JSON.stringify({ revision: "r0", state }));
+    window.fetch = vi.fn().mockResolvedValue(response(state, "r1"));
+    const client = new window.KHTStateSync("alice");
+    expect(await client.load()).toEqual(state);
+    expect(client.revision).toBe("r1");
+    expect(await client.flush()).toBe(true);
+    expect(localStorage.getItem(client.key)).toBeNull();
+    expect(window.fetch).toHaveBeenCalledTimes(1);
+    expect(window.fetch.mock.calls[0][1].headers["X-Action-Account"]).toBe("alice");
   });
 
   it("recognizes HTTP errors as failed writes, including stale windows", async () => {
@@ -87,5 +104,35 @@ describe("account persistence under interruptions", () => {
     expect(window.fetch.mock.calls.at(-1)[1].headers["If-Match"]).toBe("r1");
     expect(JSON.parse(window.fetch.mock.calls.at(-1)[1].body).events).toHaveLength(2);
     expect(client.pending).toBeNull();
+  });
+
+  it.each(["retry", "reopen"])("preserves later edits after an earlier write loses its receipt (%s)", async (mode) => {
+    const first = { version: 3, events: [{ id: "first" }] };
+    const latest = { version: 3, events: [{ id: "second" }, ...first.events] };
+    let loseReceipt;
+    window.fetch = vi.fn().mockResolvedValueOnce(response(null))
+      .mockImplementationOnce(() => new Promise((_, reject) => { loseReceipt = reject; }));
+    let client = new window.KHTStateSync("alice");
+    await client.load();
+    client.queue(first);
+    const sending = client.flush();
+    client.queue(latest);
+    loseReceipt(new Error("没有收到保存结果"));
+    expect(await sending).toBe(false);
+    expect(JSON.parse(localStorage.getItem(client.key))).toMatchObject({ state: latest, priorState: first });
+
+    if (mode === "reopen") {
+      client = new window.KHTStateSync("alice");
+      window.fetch.mockResolvedValueOnce(response(first, "r1"));
+      expect(await client.load()).toEqual(latest);
+    } else {
+      window.fetch.mockResolvedValueOnce(response(null, "r1"));
+    }
+    window.fetch.mockResolvedValueOnce(response(null, "r2"));
+    expect(await client.flush()).toBe(true);
+    const puts = window.fetch.mock.calls.filter(([, options]) => options.method === "PUT").map(([, options]) => options);
+    expect(puts.map((options) => JSON.parse(options.body))).toEqual(mode === "retry" ? [first, first, latest] : [first, latest]);
+    expect(puts.at(-1).headers["If-Match"]).toBe("r1");
+    expect(localStorage.getItem(client.key)).toBeNull();
   });
 });

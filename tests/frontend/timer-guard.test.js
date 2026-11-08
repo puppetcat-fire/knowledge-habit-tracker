@@ -32,7 +32,8 @@ describe("a running timing cannot be turned into the next timing", () => {
     expect(state.timer.predictedAction).toBe("写代码");
     expect(document.getElementById("timer-prediction").value).toBe("写代码");
     expect(document.getElementById("timer-prediction-display").textContent).toContain("写代码");
-    expect(document.getElementById("timer-start").textContent).toBe("暂停");
+    expect(document.getElementById("timer-start").disabled).toBe(true);
+    expect(document.getElementById("timer-pause").disabled).toBe(false);
     expect(document.getElementById("timer-report").classList.contains("hidden")).toBe(false);
     expect(document.getElementById("timer-report").textContent).toContain("不能开始下一次计时");
   });

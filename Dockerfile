@@ -13,8 +13,11 @@ RUN npm ci --omit=dev --ignore-scripts
 
 # 站点入口、两个应用、种子树和反馈接口
 COPY server.js demand-graph.js state-sync.js app.js index.html style.css platform.html platform.js platform.css overlay.html overlay.js ./
+COPY knowledge-service.js archive-service.js profile-service.js practice-discussion.js storage-transaction.js product-rules.js account-backup.js personal-home.js product.html product.js ./
+COPY prototypes/community-review/integration/action-state.cjs prototypes/community-review/integration/path-bookmark-schema.cjs prototypes/community-review/integration/tutorial-bookmark-schema.cjs ./prototypes/community-review/integration/
 COPY site ./site
 COPY seed-trees ./seed-trees
+COPY tools ./tools
 
 RUN mkdir -p /data && chown -R node:node /app /data
 

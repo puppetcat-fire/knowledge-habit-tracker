@@ -1,0 +1,13 @@
+const fs=require('node:fs'),path=require('node:path');
+const {atomicJson}=require('../../../storage-transaction');
+function readReplyReadState(config,user){
+ if(!/^[A-Za-z0-9_-]{1,64}$/.test(user.id))throw Error('Invalid owner');const file=path.join(config.dataDir,'reply-read-state',user.id+'.json'),state=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8')):{format:'dianliang-reply-read-state/v1',ownerId:user.id,entries:[]};
+ if(!state||Object.keys(state).some(k=>!['format','ownerId','entries'].includes(k))||state.format!=='dianliang-reply-read-state/v1'||state.ownerId!==user.id||!Array.isArray(state.entries))throw Error('Invalid reply read state');const seen=new Set();for(const e of state.entries){const key=JSON.stringify([e?.tutorialId,e?.replyId]);if(!e||Object.keys(e).some(k=>!['tutorialId','replyId','digest','readAt'].includes(k))||typeof e.tutorialId!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(e.tutorialId)||typeof e.replyId!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(e.replyId)||typeof e.digest!=='string'||!/^[a-f0-9]{64}$/.test(e.digest)||!Number.isFinite(e.readAt)||seen.has(key))throw Error('Invalid reply read entry');seen.add(key)}return {file,state};
+}
+function installReplyReadRoute(app,{config,authenticate,resolveReply}){
+ app.post('/api/review-received-replies/read',(req,res)=>{
+  const u=authenticate(req);if(!u)return res.status(401).json({ok:false,code:'UNAUTHENTICATED'});if(req.get('X-Action-Account')&&req.get('X-Action-Account')!==u.id)return res.status(409).json({ok:false,code:'ACTION_ACCOUNT_CHANGED'});const b=req.body;if(!b||Array.isArray(b)||Object.keys(b).some(k=>!['tutorialId','replyId','digest'].includes(k))||typeof b.tutorialId!=='string'||typeof b.replyId!=='string'||typeof b.digest!=='string'||!/^[a-f0-9]{64}$/.test(b.digest))return res.status(400).json({ok:false,code:'REPLY_READ_INPUT'});
+  try{const reply=resolveReply(b.tutorialId,b.replyId,u);if(!reply)return res.status(404).json({ok:false,code:'REPLY_READ_UNAVAILABLE'});if(reply.digest!==b.digest)return res.status(409).json({ok:false,code:'REPLY_READ_CHANGED'});const {file,state}=readReplyReadState(config,u),previous=state.entries.find(e=>e.tutorialId===b.tutorialId&&e.replyId===b.replyId);if(previous?.digest===b.digest)return res.json({ok:true,ownerId:u.id,entry:previous,repeated:true});const entry={tutorialId:b.tutorialId,replyId:b.replyId,digest:b.digest,readAt:Date.now()};if(previous)state.entries[state.entries.indexOf(previous)]=entry;else state.entries.push(entry);atomicJson(file,state);return res.json({ok:true,ownerId:u.id,entry,repeated:false})}catch{return res.status(503).json({ok:false,code:'REPLY_READ_UNCONFIRMED',message:'已读记录未确认，可重新查看回复后重试，原内容保留。'})}
+ });
+}
+module.exports={readReplyReadState,installReplyReadRoute};

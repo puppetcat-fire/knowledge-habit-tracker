@@ -2,9 +2,11 @@
   // 每个账号有独立的待保存副本。服务端版本用于拒绝旧窗口覆盖新记录。
   class StateSync {
     constructor(userId) {
+      this.userId = userId;
       this.key = `knowledge-habit-pending:${userId}`;
       this.revision = null;
       this.pending = null;
+      this.attemptedState = null;
       this.saving = null;
       this.blocked = false;
       this.timer = null;
@@ -24,6 +26,17 @@
 
     show(message, problem = false) {
       if (!this.status) return;
+      if (!problem) {
+        // 正常读写不占用注意力；失败后的重试保留提示，直到真正保存成功。
+        if (this.pending && this.status.classList.contains("save-problem")) return;
+        this.status.classList.add("hidden");
+        this.status.classList.remove("save-problem");
+        this.message.textContent = "";
+        this.retry.hidden = true;
+        this.exportButton.hidden = true;
+        this.reloadButton.hidden = true;
+        return;
+      }
       this.status.classList.remove("hidden");
       this.status.classList.toggle("save-problem", problem);
       this.message.textContent = message;
@@ -33,7 +46,7 @@
     }
 
     async read() {
-      const response = await root.fetch("/api/state", { credentials: "same-origin", cache: "no-store" });
+      const response = await root.fetch("/api/state", { credentials: "same-origin", cache: "no-store", headers: { "X-Action-Account": this.userId } });
       const data = await response.json();
       if (!response.ok || !data || data.ok !== true || typeof data.revision !== "string") {
         throw new Error((data && data.message) || "账号记录读取失败，请重试；原记录不会被覆盖。");
@@ -47,7 +60,16 @@
         this.pending = raw ? JSON.parse(raw) : null;
         const data = await this.read();
         this.revision = data.revision;
+        if (this.pending && JSON.stringify(this.pending.state) === JSON.stringify(data.state)) {
+          this.pending = null;
+          root.localStorage.removeItem(this.key);
+        }
         if (this.pending) {
+          if (this.pending.priorState && JSON.stringify(this.pending.priorState) === JSON.stringify(data.state)) {
+            this.pending.revision = data.revision;
+            delete this.pending.priorState;
+            root.localStorage.setItem(this.key, JSON.stringify(this.pending));
+          }
           if (this.pending.revision !== data.revision) {
             this.blocked = true;
             throw new Error("另一窗口已更新账号记录。请先导出本页未保存记录，再读取已保存版本。");
@@ -65,7 +87,9 @@
 
     queue(state) {
       // 把快照连同其基线保存，重开页面仍能恢复；不使用其他账号的缓存。
+      const priorState = this.attemptedState || this.pending?.priorState;
       this.pending = { revision: this.revision, state: JSON.parse(JSON.stringify(state)) };
+      if (priorState) this.pending.priorState = priorState;
       try {
         root.localStorage.setItem(this.key, JSON.stringify(this.pending));
         this.show("记录已保留在此浏览器，等待写入账号。");
@@ -89,14 +113,16 @@
       }
       if (!this.pending) return true;
       if (this.blocked) return false;
-      const snapshot = this.pending;
+      // 先核对未收到回执的快照，再用其已确认的版本保存后来排队的改动。
+      const snapshot = this.pending.priorState || this.pending.state;
+      this.attemptedState = snapshot;
       this.show("正在保存账号记录…");
       this.saving = (async () => {
         try {
           const response = await root.fetch("/api/state", {
             method: "PUT", credentials: "same-origin",
-            headers: { "Content-Type": "application/json", "If-Match": this.revision },
-            body: JSON.stringify(snapshot.state)
+            headers: { "Content-Type": "application/json", "If-Match": this.revision, "X-Action-Account": this.userId },
+            body: JSON.stringify(snapshot)
           });
           const data = await response.json();
           if (!response.ok || !data || data.ok !== true || typeof data.revision !== "string") {
@@ -104,12 +130,14 @@
             throw new Error((data && data.message) || "保存失败，记录仍在此浏览器，请重试。");
           }
           this.revision = data.revision;
-          if (this.pending === snapshot) {
+          this.attemptedState = null;
+          if (this.pending.state === snapshot) {
             this.pending = null;
             root.localStorage.removeItem(this.key);
             this.show("已保存到本机账号");
           } else {
             this.pending.revision = this.revision;
+            delete this.pending.priorState;
             root.localStorage.setItem(this.key, JSON.stringify(this.pending));
           }
           return true;

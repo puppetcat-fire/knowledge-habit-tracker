@@ -1,0 +1,11 @@
+/* Keep the existing close action reachable while reading a long discussion. */
+.discussion-dialog > .dialog-close {
+  position: sticky;
+  top: 0;
+  right: auto;
+  float: right;
+  margin: -8px -8px 4px 8px;
+  z-index: 2;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}

@@ -139,12 +139,17 @@ describe("account", () => {
 
   it("rejects a stale window without replacing the newer state", async () => {
     const agent = request.agent(app);
-    await agent.post("/api/register").send({ name: "revision", password: "secret-123" });
+    const { body: { user } } = await agent.post("/api/register").send({ name: "revision", password: "secret-123" });
     const first = await agent.get("/api/state");
     const written = await agent.put("/api/state").set("If-Match", first.body.revision)
       .send({ version: 3, events: [{ id: "newer" }] });
     expect(written.status).toBe(200);
     expect(written.body.revision).not.toBe(first.body.revision);
+    const repeated = await agent.put("/api/state").set("If-Match", first.body.revision).set("X-Action-Account", user.id)
+      .send({ version: 3, events: [{ id: "newer" }] }).expect(200);
+    expect(repeated.body.revision).toBe(written.body.revision);
+    await agent.get("/api/state").set("X-Action-Account", "other-account").expect(409);
+    await agent.put("/api/state").set("X-Action-Account", "other-account").send({ version: 3, events: [] }).expect(409);
     const stale = await agent.put("/api/state").set("If-Match", first.body.revision)
       .send({ version: 3, events: [] });
     expect(stale.status).toBe(409);

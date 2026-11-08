@@ -49,6 +49,29 @@ function detailDoButton() {
 }
 
 describe("the knowledge platform is a standalone dark page", () => {
+  it("shows an unavailable target for a deep link absent from the current account", () => {
+    history.replaceState(null, "", "#node/k9-math/private-other-account");
+    try {
+      loadPlatform();
+      expect(document.getElementById("platform-detail-body").textContent).toContain("找不到这个节点");
+      expect(getState()?.forest?.selectedNodeId ?? null).toBeNull();
+    } finally {
+      history.replaceState(null, "", location.pathname);
+    }
+  });
+  it("opens a historical record's linked node without changing the selected practice target", () => {
+    history.replaceState(null, "", "#node/k9-math/linear-equation");
+    try {
+      loadPlatform();
+      expect(document.getElementById("platform-detail").classList.contains("hidden")).toBe(false);
+      expect(document.getElementById("platform-detail-body").textContent).toContain("一元一次方程");
+      expect(getState()?.forest?.selectedNodeId ?? null).toBeNull();
+      document.getElementById("platform-detail-back").click();
+      expect(location.hash).toBe("");
+    } finally {
+      history.replaceState(null, "", location.pathname);
+    }
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     if (restoreLocation) {
@@ -63,7 +86,7 @@ describe("the knowledge platform is a standalone dark page", () => {
     expect(document.querySelectorAll(".nav-button")).toHaveLength(0);
     expect(document.querySelector(".platform-shell")).toBeNull();
 
-    const link = document.querySelector(`.platform-bar a[href='${HABIT_ORIGIN}/']`);
+    const link = document.querySelector(".platform-bar a[href='/habit/']");
     expect(link).not.toBeNull();
     expect(link.textContent).toContain("习惯记录");
     expect(document.querySelector(".platform-title").textContent).toContain("知识共建共享平台");
