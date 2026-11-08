@@ -25,7 +25,7 @@ describe("server", () => {
     const response = await request(app).get("/");
     expect(response.status).toBe(200);
     expect(response.text).toContain("<!DOCTYPE html>");
-    expect(response.text).toContain("渡鸦大人的工具站");
+    expect(response.text).toContain("记录我想要的东西");
     expect(response.text).toContain('href="/habit/"');
     expect(response.text).toContain('href="/platform/"');
   });
@@ -39,6 +39,34 @@ describe("server", () => {
     const perler = await request(app).get("/tools/perler-beads/");
     expect(perler.status).toBe(200);
     expect(perler.text).toContain("拼豆");
+  });
+
+  it("keeps wants private and supports idempotent creation, editing and deletion", async () => {
+    const endpoint = "/api/state/wants";
+    const page = await request(app).get("/wants/");
+    expect(page.text).toContain("我的想要");
+    expect((await request(app).get(endpoint)).status).toBe(401);
+
+    const first = request.agent(app);
+    const second = request.agent(app);
+    await first.post("/api/register").send({ name: "first-user", password: "test-password" }).expect(201);
+    await second.post("/api/register").send({ name: "second-user", password: "test-password" }).expect(201);
+    const input = {
+      id: "3da3dd27-7d8c-4bc3-a258-4afce2519cd3",
+      title: "电子鼓", budget: 800, details: "出租屋练习", source: "练习教程"
+    };
+    await first.post(endpoint).send({ ...input, link: "javascript:alert(1)" }).expect(400);
+    await first.post(endpoint).send(input).expect(201);
+    await first.post(endpoint).send(input).expect(200);
+    expect((await first.get(endpoint)).body.wants).toHaveLength(1);
+    expect((await second.get(endpoint)).body.wants).toEqual([]);
+    const url = endpoint + "/" + input.id;
+    await second.put(url).send({ ...input, status: "resolved" }).expect(404);
+    await second.delete(url).expect(200);
+    const edited = await first.put(url).send({ ...input, source: "changed", status: "resolved" }).expect(200);
+    expect(edited.body.want).toMatchObject({ source: "练习教程", status: "resolved" });
+    await first.delete(url).expect(200);
+    expect((await first.get(endpoint)).body.wants).toEqual([]);
   });
 
   it("serves the habit tracker under /habit/", async () => {

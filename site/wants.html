@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>我的想要 · humansneeds</title>
+    <link rel="stylesheet" href="/site.css" />
+  </head>
+  <body class="wants-page">
+    <main class="wants-main">
+      <nav class="wants-nav" aria-label="站点导航">
+        <a href="/">humansneeds.com</a>
+        <a href="/needs/">需求图谱</a>
+        <a href="/platform/">教程平台</a>
+      </nav>
+      <header>
+        <h1>我的想要</h1>
+        <p>想买但暂时买不起，或还没有合适的东西，都可以先记在这里。记录仅你自己可见。</p>
+      </header>
+      <p id="wants-status" role="status">正在读取账号…</p>
+      <form id="wants-account" class="wants-form" hidden>
+        <label>名字<input name="name" autocomplete="username" required /></label>
+        <label>密码<input name="password" type="password" autocomplete="current-password" required /></label>
+        <div class="wants-actions">
+          <button class="button primary" name="mode" value="login">登录</button>
+          <button class="button ghost" name="mode" value="register">注册</button>
+        </div>
+      </form>
+      <div id="wants-workspace" hidden>
+        <form id="wants-form" class="wants-form">
+          <h2 id="wants-form-title">记录一件想要的东西</h2>
+          <p id="wants-source" hidden></p>
+          <label>想要什么<input name="title" maxlength="120" placeholder="例如，一台能在出租屋练习的电子鼓" required /></label>
+          <label>用途和要求<textarea name="details" maxlength="2000" rows="3" placeholder="想解决什么？哪些要求必须满足？"></textarea></label>
+          <label>可接受预算（元，可选）<input name="budget" type="number" min="0" max="100000000" step="0.01" /></label>
+          <label>商品链接（可选）<input name="link" type="url" maxlength="1000" /></label>
+          <label>状态<select name="status"><option value="open">还想要</option><option value="resolved">已解决</option><option value="paused">暂不考虑</option></select></label>
+          <div class="wants-actions">
+            <button class="button primary" type="submit">保存需求</button>
+            <button class="button ghost" type="button" id="wants-cancel" hidden>取消编辑</button>
+            <button class="button ghost" type="button" id="wants-logout">退出账号</button>
+          </div>
+        </form>
+        <section aria-labelledby="wants-list-title">
+          <h2 id="wants-list-title">已记录</h2>
+          <p id="wants-empty" hidden>你还没有记录。先写下一件想要的东西。</p>
+          <ul id="wants-list" class="wants-list"></ul>
+        </section>
+      </div>
+    </main>
+    <script src="/wants/wants.js" defer></script>
+  </body>
+</html>

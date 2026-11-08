@@ -832,7 +832,9 @@
   // 默认折叠：展开之前 method 不写进 DOM，折叠才能被断言而不是只做视觉隐藏
   function renderTutorialCard(tutorial) {
     const expanded = expandedTutorialIds.has(tutorial.id);
-    const method = expanded ? `<div class="record-text">${escapeHtml(tutorial.method || "")}</div>` : "";
+    const source = encodeURIComponent(`${tutorial.title || tutorial.id}（${tutorial.id}）`);
+    const wantLink = LOCAL_ONLY ? "" : `<a class="platform-link" href="/wants/#source=${escapeAttribute(source)}">记为我想要</a>`;
+    const method = expanded ? `<div class="record-text">${escapeHtml(tutorial.method || "")}</div>${wantLink}` : "";
     return `
       <article class="record-item">
         <div class="tutorial-head">

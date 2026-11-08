@@ -14,6 +14,8 @@ const SITE_PUBLIC_FILES = new Map([
   ["/", "site/index.html"],
   ["/site.css", "site/site.css"],
   ["/site.js", "site/site.js"],
+  ["/wants/", "site/wants.html"],
+  ["/wants/wants.js", "site/wants.js"],
   ["/favicon.svg", "site/favicon.svg"],
   ["/robots.txt", "site/robots.txt"],
   ["/sitemap.xml", "site/sitemap.xml"]
@@ -46,6 +48,7 @@ const PUBLIC_REDIRECTS = new Map([
   ["/index.html", "/habit/"],
   ["/habit", "/habit/"],
   ["/platform", "/platform/"],
+  ["/wants", "/wants/"],
   ["/platform.html", "/platform/"]
 ]);
 
@@ -283,6 +286,51 @@ function createApp(overrides = {}) {
     }
     return res.json({ ok: true, user: { id: user.id, name: user.name } });
   });
+
+  // This subpath uses the existing production account-state proxy rule.
+  const wants = express.Router();
+  wants.use((req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    const user = authenticate(config, req);
+    if (!user) return res.status(401).json({ ok: false, code: "UNAUTHENTICATED" });
+    res.locals.wantsFile = path.join(config.dataDir, "wants", `${user.id}.json`);
+    next();
+  });
+  wants.get("/", (req, res) => {
+    res.json({ ok: true, wants: readWants(res.locals.wantsFile) });
+  });
+  wants.post("/", (req, res) => {
+    const input = validateWant(req.body);
+    if (!input) return res.status(400).json({ ok: false, message: "请检查需求名称、预算和链接。" });
+    const file = res.locals.wantsFile;
+    const items = readWants(file);
+    // The client retains this ID when retrying an uncertain submission.
+    const existing = items.find((item) => item.id === input.id);
+    if (existing) return res.json({ ok: true, want: existing });
+    const want = { ...input, createdAt: new Date().toISOString() };
+    writeJsonFile(file, [want, ...items]);
+    return res.status(201).json({ ok: true, want });
+  });
+  wants.put("/:id", (req, res) => {
+    const file = res.locals.wantsFile;
+    const items = readWants(file);
+    const index = items.findIndex((item) => item.id === req.params.id);
+    if (index < 0) return res.status(404).json({ ok: false, message: "找不到这条需求。" });
+    const input = validateWant({ ...req.body, id: req.params.id, source: items[index].source });
+    if (!input) return res.status(400).json({ ok: false, message: "请检查需求名称、预算和链接。" });
+    const want = { ...items[index], ...input };
+    items[index] = want;
+    writeJsonFile(file, items);
+    return res.json({ ok: true, want });
+  });
+  wants.delete("/:id", (req, res) => {
+    const file = res.locals.wantsFile;
+    const items = readWants(file);
+    const remaining = items.filter((item) => item.id !== req.params.id);
+    if (remaining.length !== items.length) writeJsonFile(file, remaining);
+    return res.json({ ok: true });
+  });
+  app.use("/api/state/wants", wants);
 
   app.get("/api/state", (req, res) => {
     const user = authenticate(config, req);
@@ -676,6 +724,32 @@ function readJsonFile(filePath, fallback) {
     if (error.code === "ENOENT") return fallback;
     throw error;
   }
+}
+
+function readWants(file) {
+  const items = readJsonFile(file, []);
+  if (!Array.isArray(items)) throw new Error("需求记录格式损坏。");
+  return items;
+}
+
+function validateWant(raw) {
+  if (!raw || typeof raw.id !== "string" || !/^[a-f0-9-]{36}$/.test(raw.id)) return null;
+  const title = typeof raw.title === "string" ? raw.title.trim() : "";
+  const details = typeof raw.details === "string" ? raw.details.trim() : "";
+  const link = typeof raw.link === "string" ? raw.link.trim() : "";
+  const budget = raw.budget == null || raw.budget === "" ? null : raw.budget;
+  const source = typeof raw.source === "string" ? raw.source.trim().slice(0, 240) : "";
+  if (!title || title.length > 120 || details.length > 2000 || link.length > 1000) return null;
+  if (budget !== null && (!Number.isFinite(budget) || budget < 0 || budget > 100000000)) return null;
+  if (link) {
+    try {
+      if (!["http:", "https:"].includes(new URL(link).protocol)) return null;
+    } catch {
+      return null;
+    }
+  }
+  const status = ["open", "resolved", "paused"].includes(raw.status) ? raw.status : "open";
+  return { id: raw.id, title, details, link, budget, source, status };
 }
 
 function writeJsonFile(filePath, value) {
